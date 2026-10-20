@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 from korsi_plugin import (
     CredentialMismatch,
     Event,
+    EventInProgress,
     HandleRejected,
     Installation,
     KorsiPlugin,
     KorsiRefused,
     MalformedRequest,
+    MemoryEventLog,
     SignatureInvalid,
+    SignatureStale,
     SQLiteEventLog,
     UnknownInstallation,
     sign,
@@ -150,6 +155,25 @@ async def test_a_known_installation_cannot_be_moved_to_another_korsi(
     assert store.rows[INSTALLATION].api_base == API_BASE
 
 
+async def test_an_address_that_is_not_a_plane_is_never_called(
+    plugin: KorsiPlugin, korsi: FakeKorsi
+) -> None:
+    for api_base in ("http://10.0.0.5/plugin/v1", "https://korsi.test/plugin/v1?x=/admin"):
+        raw = body(installed(api_base=api_base))
+        with pytest.raises(CredentialMismatch):
+            await plugin.lifecycle(raw, sign(SECRET, raw))
+    assert korsi.calls == []
+
+
+async def test_an_empty_handle_is_never_the_installation(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    installation = await plugin.installations.installation(INSTALLATION)
+    assert installation is not None
+    with pytest.raises(KorsiRefused) as raised:
+        await plugin.client(installation, "").whoami()
+    assert raised.value.status == 401
+
+
 async def test_only_trusted_korsis_when_the_plugin_names_them(
     korsi: FakeKorsi, store: Store
 ) -> None:
@@ -201,6 +225,9 @@ async def test_garbage_is_malformed(plugin: KorsiPlugin) -> None:
         (problem(403, "plugin.installation_inactive", state="removed"), "removed"),
         (problem(403, "plugin.installation_inactive", state="suspended"), "unconfirmed"),
         (problem(503, "service.unavailable"), "unconfirmed"),
+        # Not Korsi answering: a proxy's bare 401, a redirect to another host.
+        (httpx.Response(401, text="Unauthorized"), "unconfirmed"),
+        (httpx.Response(301, headers={"location": "https://elsewhere.test/"}), "unconfirmed"),
     ],
 )
 async def test_removed_is_believed_only_when_korsi_refuses_the_credential(
@@ -267,11 +294,69 @@ async def test_an_event_signed_with_another_secret_is_refused(plugin: KorsiPlugi
         await plugin.event(raw, sign("not-it", raw), handler)
 
 
-async def test_an_event_for_a_stranger_is_404(plugin: KorsiPlugin) -> None:
+async def test_an_event_for_an_installation_not_known_yet_is_retried(plugin: KorsiPlugin) -> None:
+    # The plugin may have been down when Korsi delivered `installed`; a 4xx would lose the event.
     raw = body(event(installation_id=str(uuid.uuid4())))
     with pytest.raises(UnknownInstallation) as raised:
         await plugin.verified_event(raw, sign(SECRET, raw))
-    assert raised.value.status == 404
+    assert raised.value.status == 503
+
+
+async def test_an_event_another_delivery_still_runs_is_retried_not_dropped(
+    plugin: KorsiPlugin,
+) -> None:
+    await install(plugin)
+    raw = body(event())
+    started, release = asyncio.Event(), asyncio.Event()
+    runs: list[int] = []
+
+    async def slow(_: Installation, __: Event) -> None:
+        runs.append(1)
+        started.set()
+        await release.wait()
+
+    first = asyncio.create_task(plugin.event(raw, sign(SECRET, raw), slow))
+    await started.wait()
+    # Korsi timed the first delivery out and tries again while it still runs.
+    with pytest.raises(EventInProgress) as raised:
+        await plugin.event(raw, sign(SECRET, raw), slow)
+    assert raised.value.status == 503
+    release.set()
+    assert await first == "handled"
+    assert await plugin.event(raw, sign(SECRET, raw), slow) == "duplicate"
+    assert len(runs) == 1
+
+
+async def test_an_event_whose_handler_died_runs_again_once_the_lease_ends(
+    korsi: FakeKorsi, store: Store
+) -> None:
+    log = MemoryEventLog()
+    now = [1000.0]
+    log._now = lambda: now[0]
+    async with KorsiPlugin(
+        store, events=log, event_lease_seconds=60, transport=transport(korsi)
+    ) as plugin:
+        await install(plugin)
+        raw = body(event())
+        # A delivery that claimed it, then the process died: nothing finished, nothing forgot.
+        assert await log.claim(INSTALLATION, str(uuid.UUID(int=7)), lease_seconds=60) == "new"
+        with pytest.raises(EventInProgress):
+            await plugin.event(raw, sign(SECRET, raw), lambda *_: asyncio.sleep(0))
+        now[0] += 61
+        assert await plugin.event(raw, sign(SECRET, raw), lambda *_: asyncio.sleep(0)) == "handled"
+
+
+async def test_a_genuine_but_stale_signature_is_retried_a_forged_one_refused(
+    plugin: KorsiPlugin,
+) -> None:
+    await install(plugin)
+    raw = body(event())
+    with pytest.raises(SignatureStale) as stale:
+        await plugin.verified_event(raw, sign(SECRET, raw, now=1))
+    assert stale.value.status == 503
+    with pytest.raises(SignatureInvalid) as forged:
+        await plugin.verified_event(raw, sign("forged", raw, now=1))
+    assert forged.value.status == 401
 
 
 async def test_a_durable_event_log_survives_a_restart(
@@ -333,6 +418,8 @@ async def test_a_page_handle_is_vouched_for_by_korsi_once(
     [
         (None, 401),
         ("Basic abc", 401),
+        ("Bearer ", 401),
+        ("Bearer    ", 401),
         ("Bearer nobody", 401),
         (f"Bearer {FOREIGN_HANDLE}", 403),
         (f"Bearer {TOKEN}", 403),

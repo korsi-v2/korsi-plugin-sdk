@@ -32,6 +32,15 @@ class SignatureInvalid(RequestRejected):
     status = 401
 
 
+class SignatureStale(SignatureInvalid):
+    """Korsi's signature, but older (or newer) than the tolerance: a replay, or a clock off by
+    minutes on one side. Refused all the same; answered 503 rather than 401 because Korsi gives
+    up on an event answered with a 4xx, and a skewed clock would then lose every event for good.
+    """
+
+    status = 503
+
+
 def _digest(secret: str, stamp: str, body: bytes) -> str:
     return hmac.new(secret.encode(), f"{stamp}.".encode() + body, hashlib.sha256).hexdigest()
 
@@ -59,18 +68,18 @@ def verify_signature(
         msg = "missing Korsi-Signature"
         raise SignatureInvalid(msg)
     stamp = ""
-    digests: list[str] = []
+    digests: list[bytes] = []
     for part in header.split(","):
         key, _, value = part.strip().partition("=")
         if key == "t":
             stamp = value
         elif key == "v1" and value:
-            digests.append(value)
-    current = now if now is not None else time.time()
-    if not stamp.isdigit() or abs(current - int(stamp)) > tolerance:
-        msg = "stale or malformed signature"
+            digests.append(value.encode("utf-8", "replace"))
+    # ASCII digits only: str.isdigit() also says yes to "²", which int() then refuses.
+    if not stamp or not stamp.isascii() or not stamp.isdigit():
+        msg = "malformed signature"
         raise SignatureInvalid(msg)
-    expected = _digest(secret, stamp, body)
+    expected = _digest(secret, stamp, body).encode()
     # Every candidate is compared, in constant time, so the time taken says nothing about which.
     matched = False
     for digest in digests:
@@ -78,3 +87,7 @@ def verify_signature(
     if not matched:
         msg = "signature does not match"
         raise SignatureInvalid(msg)
+    current = now if now is not None else time.time()
+    if abs(current - int(stamp)) > tolerance:
+        msg = "stale signature: a replay, or a clock that is minutes off"
+        raise SignatureStale(msg)

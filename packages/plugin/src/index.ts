@@ -17,7 +17,12 @@ export {
   type KorsiClientOptions,
   type Reservation,
 } from './client.js';
-export { MemoryEventLog, type EventLog } from './dedupe.js';
+export {
+  DEFAULT_LEASE_SECONDS,
+  MemoryEventLog,
+  type ClaimStatus,
+  type EventLog,
+} from './dedupe.js';
 export { PlaneOperations, type CallOptions } from './operations.js';
 export {
   EVENTS_PATH,
@@ -49,6 +54,7 @@ export {
 export type * from './models.js';
 export {
   CredentialMismatch,
+  EventInProgress,
   HandleRejected,
   INSTALLATION_HEADER,
   KorsiPlugin,
@@ -66,11 +72,13 @@ export {
   headerValue,
   SIGNATURE_HEADER,
   SignatureInvalid,
+  SignatureStale,
   sign,
   verifySignature,
   type HeaderSource,
   type RawBody,
 } from './signature.js';
+export { apiBaseProblem } from './trust.js';
 export {
   amountText,
   compareAmounts,

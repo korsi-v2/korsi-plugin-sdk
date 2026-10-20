@@ -29,6 +29,7 @@ export {
   type ToastKind,
 } from './protocol.js';
 export {
+  BridgeTrustError,
   BridgeVersionError,
   bridgeUrl,
   connectKorsi,
@@ -36,6 +37,7 @@ export {
   korsiOrigin,
   loadBridge,
   normaliseOrigin,
+  originAllowed,
   type ConnectKorsiOptions,
   type ImportModule,
   type KorsiConnection,

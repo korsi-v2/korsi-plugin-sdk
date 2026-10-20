@@ -3,11 +3,13 @@
 The server side of a [Korsi](https://korsi.ai) plugin, in Python (3.11+, asyncio, `httpx`).
 
 ```python
-from korsi_plugin import KorsiPlugin, SIGNATURE_HEADER, Topic
+from korsi_plugin import KorsiPlugin, SIGNATURE_HEADER, SQLiteEventLog, Topic
 
-plugin = KorsiPlugin(store)  # your InstallationStore; also an EventLog if you like
-# (KorsiPlugin(store, events=store)), else events are
-# remembered in memory
+plugin = KorsiPlugin(
+    store,  # your InstallationStore
+    events=SQLiteEventLog(data_dir / "plugin.db"),  # durable; in memory when left out
+    trusted_api_bases=["https://*.korsi.ai/plugin/v1"],  # leave out only in a public catalogue
+)
 
 # POST /korsi/lifecycle -- installed is verified and confirmed with Korsi before it is kept;
 # removed is believed only once Korsi refuses the stored credential.
@@ -16,7 +18,8 @@ result = await plugin.lifecycle(
 )  # {"status": result.status}
 
 
-# POST /korsi/events -- verified, deduplicated, retried by Korsi if the handler raises.
+# POST /korsi/events -- verified, deduplicated, retried by Korsi if the handler raises; a second
+# delivery while the first still runs is answered 503 (EventInProgress), so Korsi comes back.
 async def on_event(installation, event):
     if event.topic == Topic.PROPOSAL_SETTLED:
         ...

@@ -22,7 +22,7 @@
 import { createHash } from 'node:crypto';
 
 import { DEFAULT_TIMEOUT_MS, KorsiClient, type Caller } from './client.js';
-import { MemoryEventLog, type EventLog } from './dedupe.js';
+import { DEFAULT_LEASE_SECONDS, MemoryEventLog, type EventLog } from './dedupe.js';
 import {
   installationOf,
   MalformedRequest,
@@ -37,6 +37,7 @@ import {
 } from './deliveries.js';
 import { credentialRefused, KorsiError, KorsiRefused, RequestRejected } from './errors.js';
 import { DEFAULT_TOLERANCE_SECONDS, verifySignature, type RawBody } from './signature.js';
+import { apiBaseProblem } from './trust.js';
 
 /**
  * The header a plugin's page names its installation in, beside `Authorization: Bearer <handle>`.
@@ -44,10 +45,20 @@ import { DEFAULT_TOLERANCE_SECONDS, verifySignature, type RawBody } from './sign
  */
 export const INSTALLATION_HEADER = 'X-Korsi-Installation';
 
-/** A call for an installation this plugin does not have. Answer 404. */
+/** A call for an installation this plugin does not have. Answer 404 -- 503 for an event. */
 export class UnknownInstallation extends RequestRejected {
+  constructor(message: string, status = 404) {
+    super(message, status);
+  }
+}
+
+/**
+ * The event is being handled by another delivery right now. 503: Korsi comes back later -- any
+ * 4xx but 429 would make it give the event up for good.
+ */
+export class EventInProgress extends RequestRejected {
   constructor(message: string) {
-    super(message, 404);
+    super(message, 503);
   }
 }
 
@@ -108,10 +119,14 @@ export interface KorsiPluginOptions {
   events?: EventLog;
   /**
    * The Korsi plugin planes this plugin accepts installations from
-   * (`https://acme.korsi.ai/plugin/v1`). Unset accepts any -- right for a plugin in a public
-   * catalogue, which any organization may install.
+   * (`https://acme.korsi.ai/plugin/v1`, or `https://*.korsi.ai/plugin/v1`). Unset accepts any that
+   * looks like a plane -- right only for a plugin in a public catalogue (see `./trust.ts`).
    */
   trustedApiBases?: Iterable<string>;
+  /** Accept a plain-`http` plane beyond this machine, for development. */
+  allowHttp?: boolean;
+  /** How long a delivery holds an event before another may take it over: longer than any handler. */
+  eventLeaseSeconds?: number;
   /** How old a signature may be, in seconds. */
   tolerance?: number;
   /** How long Korsi's word on a page's handle is reused, in seconds. */
@@ -127,7 +142,9 @@ const trimBase = (base: string): string => base.replace(/\/+$/, '');
 export class KorsiPlugin {
   readonly installations: InstallationStore;
   readonly eventLog: EventLog;
-  readonly #trusted: Set<string> | null;
+  readonly #trusted: string[] | null;
+  readonly #allowHttp: boolean;
+  readonly #lease: number;
   readonly #tolerance: number;
   readonly #handleTtlMs: number;
   readonly #timeout: number;
@@ -137,16 +154,19 @@ export class KorsiPlugin {
   constructor(installations: InstallationStore, options: KorsiPluginOptions = {}) {
     this.installations = installations;
     this.eventLog = options.events ?? new MemoryEventLog();
-    this.#trusted = options.trustedApiBases
-      ? new Set([...options.trustedApiBases].map(trimBase))
-      : null;
+    this.#trusted = options.trustedApiBases ? [...options.trustedApiBases] : null;
+    this.#allowHttp = options.allowHttp ?? false;
+    this.#lease = options.eventLeaseSeconds ?? DEFAULT_LEASE_SECONDS;
     this.#tolerance = options.tolerance ?? DEFAULT_TOLERANCE_SECONDS;
     this.#handleTtlMs = (options.handleCacheSeconds ?? 60) * 1000;
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.#fetch = options.fetch;
   }
 
-  /** The plugin plane as `bearer` -- a person's handle -- or as the installation itself. */
+  /**
+   * The plugin plane as `bearer` -- a person's handle -- or, with none, as the installation itself.
+   * An empty handle is a handle (Korsi refuses it), never the installation's token.
+   */
   client(installation: Installation, bearer?: string): KorsiClient {
     return new KorsiClient(installation.apiBase, bearer ?? installation.token, {
       timeout: this.#timeout,
@@ -154,10 +174,11 @@ export class KorsiPlugin {
     });
   }
 
-  async #known(installationId: string): Promise<Installation> {
+  async #known(installationId: string, status = 404): Promise<Installation> {
     const installation = await this.installations.installation(installationId);
-    if (!installation)
-      throw new UnknownInstallation(`installation ${installationId} is not known here`);
+    if (!installation) {
+      throw new UnknownInstallation(`installation ${installationId} is not known here`, status);
+    }
     return installation;
   }
 
@@ -180,12 +201,9 @@ export class KorsiPlugin {
    * installation page -- goes through too (`register`).
    */
   async accept(installation: Installation): Promise<Installation> {
-    const apiBase = trimBase(installation.apiBase);
-    if (this.#trusted && !this.#trusted.has(apiBase)) {
-      throw new CredentialMismatch(
-        `${apiBase} is not a Korsi this plugin accepts installations from`
-      );
-    }
+    const apiBase = trimBase(installation.apiBase.trim());
+    const problem = apiBaseProblem(apiBase, this.#trusted, { allowHttp: this.#allowHttp });
+    if (problem) throw new CredentialMismatch(problem);
     const known = await this.installations.installation(installation.id);
     if (known && trimBase(known.apiBase) !== apiBase) {
       // A real Korsi never moves an installation; a message that tries is somebody else's.
@@ -255,21 +273,27 @@ export class KorsiPlugin {
 
   // -- 2. events ----------------------------------------------------------------------------------
 
-  /** An event's body, verified with its installation's secret and parsed. No deduplication. */
+  /**
+   * An event's body, verified with its installation's secret and parsed. No deduplication. An
+   * installation not known *yet* is answered 503, not 404: the plugin may have been down when
+   * Korsi delivered `installed`, and Korsi gives up on an event answered with a 4xx.
+   */
   async verifiedEvent(
     body: RawBody,
     signature: string | null | undefined
   ): Promise<{ installation: Installation; event: KorsiEvent }> {
     const event = parseEvent(readJson(body));
-    const installation = await this.#known(event.installationId);
+    const installation = await this.#known(event.installationId, 503);
     verifySignature(installation.signingSecret, body, signature, { tolerance: this.#tolerance });
     return { installation, event };
   }
 
   /**
-   * `POST /korsi/events`: verify, skip a repeat, run `handler` once. Answer Korsi 2xx for both
-   * outcomes. If `handler` throws, the event is given back to the log and the error goes on: answer
-   * Korsi 5xx and it delivers the event again later.
+   * `POST /korsi/events`: verify, skip a repeat, run `handler` when it is its turn. Answer Korsi 2xx
+   * for both outcomes. Throws `EventInProgress` (503) while another delivery of the same event is
+   * still running it, so Korsi comes back rather than taking a 2xx for done. If `handler` throws,
+   * the event is given back to the log and the error goes on: answer Korsi 5xx and it delivers the
+   * event again later.
    */
   async event(
     body: RawBody,
@@ -277,13 +301,18 @@ export class KorsiPlugin {
     handler: (installation: Installation, event: KorsiEvent) => unknown
   ): Promise<EventStatus> {
     const { installation, event } = await this.verifiedEvent(body, signature);
-    if (!(await this.eventLog.firstTime(installation.id, event.id))) return 'duplicate';
+    const claimed = await this.eventLog.claim(installation.id, event.id, this.#lease);
+    if (claimed === 'done') return 'duplicate';
+    if (claimed === 'busy') {
+      throw new EventInProgress(`event ${event.id} is being handled; come back later`);
+    }
     try {
       await handler(installation, event);
     } catch (error) {
       await this.eventLog.forget(installation.id, event.id);
       throw error;
     }
+    await this.eventLog.finish(installation.id, event.id);
     return 'handled';
   }
 
@@ -322,6 +351,7 @@ export class KorsiPlugin {
       throw new HandleRejected('a handle is required', 401);
     }
     const handle = authorization.slice(7).trim();
+    if (!handle) throw new HandleRejected('a handle is required', 401);
     if (!installationId || !/^[0-9a-f-]{36}$/i.test(installationId)) {
       throw new MalformedRequest(`${INSTALLATION_HEADER} is required`);
     }

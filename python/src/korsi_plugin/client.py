@@ -173,12 +173,22 @@ class KorsiClient(PlaneOperations):
         query = {key: _query(value) for key, value in (params or {}).items() if value is not None}
         try:
             response = await self._http.request(
-                method, self.api_base + path, json=json, params=query, headers=self._headers
+                method,
+                self.api_base + path,
+                json=json,
+                params=query,
+                headers=self._headers,
+                follow_redirects=False,
             )
         except httpx.HTTPError as error:
             msg = f"{method} {path}: {type(error).__name__}"
             raise KorsiUnreachable(msg) from error
         self.plugin_api = response.headers.get(VERSION_HEADER, self.plugin_api)
+        if 300 <= response.status_code < 400:
+            # The plane does not redirect. Following one would carry the bearer to another host,
+            # or arrive without it and read as a refusal; neither is Korsi's answer.
+            msg = f"{method} {path}: redirected ({response.status_code}), not followed"
+            raise KorsiUnreachable(msg)
         if response.status_code >= 400:
             raise _refusal(response)
         if response.status_code == 204 or not response.content:
@@ -407,4 +417,5 @@ def _refusal(response: httpx.Response) -> KorsiRefused | KorsiUnreachable:
         _STATUS_CODES.get(status, f"http.{status}"),
         response.text[:300],
         retry_after=_retry_after(response),
+        problem=False,
     )

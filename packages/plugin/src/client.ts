@@ -150,11 +150,19 @@ export class KorsiClient extends PlaneOperations {
         headers,
         body: json === undefined ? undefined : JSON.stringify(json),
         signal: AbortSignal.timeout(this.#timeout),
+        // The plane does not redirect. Following one would carry the bearer to another host, or
+        // arrive without it and read as a refusal; neither is Korsi's answer.
+        redirect: 'manual',
       });
     } catch (error) {
       throw new KorsiUnreachable(`${method} ${path}: ${(error as Error).name}`, { cause: error });
     }
     this.pluginApi = response.headers.get(VERSION_HEADER) ?? this.pluginApi;
+    if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+      throw new KorsiUnreachable(
+        `${method} ${path}: redirected (${response.status}), not followed`
+      );
+    }
     if (response.status >= 400) throw await refusal(response);
     const text = await response.text();
     return (response.status === 204 || !text ? null : JSON.parse(text)) as T;
@@ -408,5 +416,6 @@ async function refusal(response: Response): Promise<KorsiRefused | KorsiUnreacha
   }
   return new KorsiRefused(status, STATUS_CODES[status] ?? `http.${status}`, text.slice(0, 300), {
     retryAfter: retryAfter(response),
+    problem: false,
   });
 }

@@ -33,7 +33,7 @@ from typing import Final, Literal, Protocol, Self
 import httpx
 
 from korsi_plugin.client import DEFAULT_TIMEOUT_SECONDS, Caller, KorsiClient
-from korsi_plugin.dedupe import EventLog, MemoryEventLog
+from korsi_plugin.dedupe import DEFAULT_LEASE_SECONDS, EventLog, MemoryEventLog
 from korsi_plugin.deliveries import (
     Event,
     Installation,
@@ -45,6 +45,7 @@ from korsi_plugin.deliveries import (
 )
 from korsi_plugin.errors import KorsiError, KorsiRefused, RequestRejected, credential_refused
 from korsi_plugin.signature import DEFAULT_TOLERANCE_SECONDS, verify_signature
+from korsi_plugin.trust import api_base_problem
 
 #: The header a plugin's page names its installation in, beside ``Authorization: Bearer <handle>``.
 #: Korsi does not read it; it is how this SDK's page helpers and server helpers agree.
@@ -55,6 +56,13 @@ class UnknownInstallation(RequestRejected):
     """A call for an installation this plugin does not have."""
 
     status = 404
+
+
+class EventInProgress(RequestRejected):
+    """The event is being handled by another delivery right now. 503: Korsi comes back later --
+    any 4xx but 429 would make it give the event up for good."""
+
+    status = 503
 
 
 class CredentialMismatch(RequestRejected):
@@ -126,8 +134,10 @@ class KorsiPlugin:
         *,
         events: EventLog | None = None,
         trusted_api_bases: Collection[str] | None = None,
+        allow_http: bool = False,
         tolerance: int = DEFAULT_TOLERANCE_SECONDS,
         handle_cache_seconds: float = 60.0,
+        event_lease_seconds: float = DEFAULT_LEASE_SECONDS,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -135,16 +145,20 @@ class KorsiPlugin:
         :param installations: where installations are kept.
         :param events: the event log for deduplication; in memory when not given.
         :param trusted_api_bases: the Korsi plugin planes this plugin accepts installations from
-            (``https://acme.korsi.ai/plugin/v1``). ``None`` accepts any -- right for a plugin in a
-            public catalogue, which any organization may install.
+            (``https://acme.korsi.ai/plugin/v1``, or ``https://*.korsi.ai/plugin/v1``). ``None``
+            accepts any that looks like a plane -- right only for a plugin in a public catalogue,
+            which any organization may install (see :mod:`korsi_plugin.trust`).
+        :param allow_http: accept a plain-``http`` plane beyond this machine, for development.
         :param tolerance: how old a signature may be, in seconds.
         :param handle_cache_seconds: how long Korsi's word on a page's handle is reused.
+        :param event_lease_seconds: how long a delivery holds an event before another may take it
+            over -- longer than the slowest handler.
         """
         self.installations = installations
         self.event_log: EventLog = events if events is not None else MemoryEventLog()
-        self._trusted = (
-            None if trusted_api_bases is None else {base.rstrip("/") for base in trusted_api_bases}
-        )
+        self._trusted = None if trusted_api_bases is None else tuple(trusted_api_bases)
+        self._allow_http = allow_http
+        self._lease = event_lease_seconds
         self._tolerance = tolerance
         self._handle_ttl = handle_cache_seconds
         self._handles: OrderedDict[str, tuple[float, Caller]] = OrderedDict()
@@ -160,14 +174,16 @@ class KorsiPlugin:
         await self.aclose()
 
     def client(self, installation: Installation, bearer: str | None = None) -> KorsiClient:
-        """The plugin plane as ``bearer`` -- a person's handle -- or as the installation itself."""
-        return KorsiClient(installation.api_base, bearer or installation.token, http=self._http)
+        """The plugin plane as ``bearer`` -- a person's handle -- or, with none, as the installation
+        itself. An empty handle is a handle (Korsi refuses it), never the installation's token."""
+        token = installation.token if bearer is None else bearer
+        return KorsiClient(installation.api_base, token, http=self._http)
 
-    async def _known(self, installation_id: uuid.UUID) -> Installation:
+    async def _known(self, installation_id: uuid.UUID, *, status: int = 404) -> Installation:
         installation = await self.installations.installation(installation_id)
         if installation is None:
             msg = f"installation {installation_id} is not known here"
-            raise UnknownInstallation(msg)
+            raise UnknownInstallation(msg, status=status)
         return installation
 
     # -- 1. lifecycle ------------------------------------------------------------------------------
@@ -195,10 +211,10 @@ class KorsiPlugin:
         credential -- read once from Korsi's installation page, because Korsi cannot reach the
         developer's machine -- goes through too (:meth:`register`).
         """
-        api_base = installation.api_base.rstrip("/")
-        if self._trusted is not None and api_base not in self._trusted:
-            msg = f"{api_base} is not a Korsi this plugin accepts installations from"
-            raise CredentialMismatch(msg)
+        api_base = installation.api_base.strip().rstrip("/")
+        problem = api_base_problem(api_base, self._trusted, allow_http=self._allow_http)
+        if problem is not None:
+            raise CredentialMismatch(problem)
         known = await self.installations.installation(installation.id)
         if known is not None and known.api_base.rstrip("/") != api_base:
             # A real Korsi never moves an installation; a message that tries is somebody else's.
@@ -259,9 +275,13 @@ class KorsiPlugin:
     async def verified_event(
         self, body: bytes, signature: str | None
     ) -> tuple[Installation, Event]:
-        """An event's body, verified with its installation's secret and parsed. No deduplication."""
+        """An event's body, verified with its installation's secret and parsed. No deduplication.
+
+        An installation not known *yet* is answered 503, not 404: the plugin may have been down when
+        Korsi delivered ``installed``, and Korsi gives up on an event answered with a 4xx.
+        """
         event = Event.parse(read_json(body))
-        installation = await self._known(event.installation_id)
+        installation = await self._known(event.installation_id, status=503)
         verify_signature(installation.signing_secret, body, signature, tolerance=self._tolerance)
         return installation, event
 
@@ -271,19 +291,28 @@ class KorsiPlugin:
         signature: str | None,
         handler: Callable[[Installation, Event], Awaitable[object]],
     ) -> EventStatus:
-        """``POST /korsi/events``: verify, skip a repeat, run ``handler`` once.
+        """``POST /korsi/events``: verify, skip a repeat, run ``handler`` when it is its turn.
 
-        Answer Korsi 2xx for both outcomes. If ``handler`` raises, the event is given back to the
-        log and the error propagates: answer Korsi 5xx and it delivers the event again later.
+        Answer Korsi 2xx for both outcomes. Raises :class:`EventInProgress` (503) while another
+        delivery of the same event is still running it, so Korsi comes back rather than taking a
+        2xx for done. If ``handler`` raises, the event is given back to the log and the error
+        propagates: answer Korsi 5xx and it delivers the event again later.
         """
         installation, event = await self.verified_event(body, signature)
-        if not await self.event_log.first_time(installation.id, str(event.id)):
+        claimed = await self.event_log.claim(
+            installation.id, str(event.id), lease_seconds=self._lease
+        )
+        if claimed == "done":
             return "duplicate"
+        if claimed == "busy":
+            msg = f"event {event.id} is being handled; come back later"
+            raise EventInProgress(msg)
         try:
             await handler(installation, event)
         except BaseException:
             await self.event_log.forget(installation.id, str(event.id))
             raise
+        await self.event_log.finish(installation.id, str(event.id))
         return "handled"
 
     # -- 3. tools ----------------------------------------------------------------------------------
@@ -311,6 +340,9 @@ class KorsiPlugin:
             msg = "a handle is required"
             raise HandleRejected(msg, status=401)
         handle = authorization.split(" ", 1)[1].strip()
+        if not handle:
+            msg = "a handle is required"
+            raise HandleRejected(msg, status=401)
         try:
             wanted = uuid.UUID(installation_id or "")
         except ValueError as error:

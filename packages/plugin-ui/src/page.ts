@@ -47,6 +47,21 @@ export interface KorsiPage {
   stop(): void;
 }
 
+/**
+ * Tell Korsi the page's height now and on every change, with an observer of this page's own. The
+ * runtime's `resize()` keeps one shared observer, which a second mount of the same page (React's
+ * strict mode does exactly that) would stop for both.
+ */
+function followHeight(bridge: KorsiBridge, root: HTMLElement): () => void {
+  const measure = () => bridge.resize(Math.ceil(root.scrollHeight));
+  measure();
+  if (typeof ResizeObserver === 'undefined') return () => undefined;
+  const observer = new ResizeObserver(measure);
+  observer.observe(root);
+  if (document.body) observer.observe(document.body);
+  return () => observer.disconnect();
+}
+
 /** Connect and keep the page in Korsi's look. Null when the page is not inside Korsi. */
 export async function mountKorsiPage(options: MountOptions = {}): Promise<KorsiPage | null> {
   const connection = await connectKorsi(options);
@@ -71,7 +86,7 @@ export async function mountKorsiPage(options: MountOptions = {}): Promise<KorsiP
     applyContext(next, root);
     options.onChange?.(next);
   });
-  const stopResize = options.resize === false ? () => undefined : bridge.resize();
+  const stopResize = options.resize === false ? () => undefined : followHeight(bridge, root);
 
   return {
     bridge,

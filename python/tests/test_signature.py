@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from korsi_plugin import RequestRejected, SignatureInvalid, sign, verify_signature
+from korsi_plugin import RequestRejected, SignatureInvalid, SignatureStale, sign, verify_signature
 
 SECRET = "s3cret"
 BODY = b'{"topic":"plugin.proposal.settled"}'
@@ -31,9 +31,17 @@ def test_another_secret_fails() -> None:
         verify_signature("other", BODY, sign(SECRET, BODY, now=1000), now=1010)
 
 
-def test_an_old_signature_is_a_replay() -> None:
-    with pytest.raises(SignatureInvalid, match="stale"):
+def test_an_old_signature_is_a_replay_answered_503() -> None:
+    # Refused either way; 503 so a Korsi whose clock is off is not given up on.
+    with pytest.raises(SignatureStale, match="stale") as raised:
         verify_signature(SECRET, BODY, sign(SECRET, BODY, now=1000), now=1000 + 301)
+    assert raised.value.status == 503
+
+
+def test_an_old_forged_signature_is_still_401() -> None:
+    with pytest.raises(SignatureInvalid) as raised:
+        verify_signature(SECRET, BODY, sign("forged", BODY, now=1000), now=1000 + 301)
+    assert raised.value.status == 401
 
 
 def test_a_signature_from_the_future_is_refused_too() -> None:
@@ -48,7 +56,9 @@ def test_no_signature_fails_and_answers_401() -> None:
     assert raised.value.status == 401
 
 
-@pytest.mark.parametrize("header", ["garbage", "t=abc,v1=00", "v1=00", "t=1000"])
+@pytest.mark.parametrize(
+    "header", ["garbage", "t=abc,v1=00", "v1=00", "t=1000", "t=²,v1=00", "t=1000,v1=é"]
+)
 def test_malformed_headers_fail(header: str) -> None:
     with pytest.raises(SignatureInvalid):
         verify_signature(SECRET, BODY, header, now=1000)

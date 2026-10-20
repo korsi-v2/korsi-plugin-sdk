@@ -18,39 +18,52 @@ import type { PlanPeriod, WalletView } from './models.js';
 /** A quantity or an amount, exact: a decimal string, or an integer. */
 export type Quantity = string | number | bigint;
 
-const DECIMAL = /^([+-]?)(\d*)(?:\.(\d*))?$/;
+/** Korsi writes amounts the way Python's `Decimal` does: `10.5000`, and also `0E-10`, `5.000E-7`. */
+const DECIMAL = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/;
 
-function scaled(value: Quantity, scale: number): bigint {
+/** An exact decimal: `digits / 10 ** scale`, with `scale` at least zero. */
+interface Exact {
+  digits: bigint;
+  scale: number;
+}
+
+function exact(value: Quantity): Exact {
+  if (typeof value === 'bigint') return { digits: value, scale: 0 };
+  if (typeof value === 'number' && !Number.isInteger(value)) {
+    throw new TypeError(`pass ${value} as a decimal string: a float is not an exact amount`);
+  }
   const text = typeof value === 'string' ? value.trim() : String(value);
   const match = DECIMAL.exec(text);
   if (!match || (!match[2] && !match[3])) throw new TypeError(`not a decimal amount: ${text}`);
-  const fraction = (match[3] ?? '').padEnd(scale, '0').slice(0, scale);
-  const magnitude = BigInt(`${match[2] || '0'}${fraction}` || '0');
-  return match[1] === '-' ? -magnitude : magnitude;
-}
-
-function scaleOf(value: Quantity): number {
-  const text = String(value);
-  const dot = text.indexOf('.');
-  return dot < 0 ? 0 : text.length - dot - 1;
+  const fraction = match[3] ?? '';
+  const exponent = Number(match[4] ?? 0);
+  let digits = BigInt(`${match[2] || '0'}${fraction}` || '0');
+  let scale = fraction.length - exponent;
+  if (scale < 0) {
+    digits *= 10n ** BigInt(-scale);
+    scale = 0;
+  }
+  return { digits: match[1] === '-' ? -digits : digits, scale };
 }
 
 /** `-1`, `0` or `1` as `a` is less than, equal to or more than `b`, compared exactly. */
 export function compareAmounts(a: Quantity, b: Quantity): -1 | 0 | 1 {
-  const scale = Math.max(scaleOf(a), scaleOf(b));
-  const left = scaled(a, scale);
-  const right = scaled(b, scale);
-  if (left === right) return 0;
-  return left < right ? -1 : 1;
+  const left = exact(a);
+  const right = exact(b);
+  const scale = Math.max(left.scale, right.scale);
+  const l = left.digits * 10n ** BigInt(scale - left.scale);
+  const r = right.digits * 10n ** BigInt(scale - right.scale);
+  if (l === r) return 0;
+  return l < r ? -1 : 1;
 }
 
-/** An amount as Korsi accepts it: a decimal string. Throws on anything else (a float's `1e-7`). */
+/**
+ * An amount as Korsi accepts it: a decimal string. Throws on anything inexact -- a float such as
+ * `0.1 + 0.2`, or text that is not a number -- rather than send what nobody meant.
+ */
 export function amountText(value: Quantity): string {
-  const text = typeof value === 'string' ? value.trim() : String(value);
-  if (!DECIMAL.test(text) || text === '' || text === '.') {
-    throw new TypeError(`not a decimal amount: ${text}`);
-  }
-  return text;
+  exact(value);
+  return typeof value === 'string' ? value.trim() : String(value);
 }
 
 /** A wallet's amounts, as Korsi sent them, with an exact comparison. */

@@ -25,8 +25,19 @@ export type RawBody = string | Uint8Array;
 
 /** A request that does not carry Korsi's signature for this installation. Answer 401. */
 export class SignatureInvalid extends RequestRejected {
+  constructor(message: string, status = 401) {
+    super(message, status);
+  }
+}
+
+/**
+ * Korsi's signature, but older (or newer) than the tolerance: a replay, or a clock off by minutes
+ * on one side. Refused all the same; answered 503 rather than 401 because Korsi gives up on an
+ * event answered with a 4xx, and a skewed clock would then lose every event for good.
+ */
+export class SignatureStale extends SignatureInvalid {
   constructor(message: string) {
-    super(message, 401);
+    super(message, 503);
   }
 }
 
@@ -65,10 +76,7 @@ export function verifySignature(
     if (key === 't') stamp = value;
     else if (key === 'v1' && value) digests.push(value);
   }
-  const current = now ?? Date.now() / 1000;
-  if (!/^\d+$/.test(stamp) || Math.abs(current - Number(stamp)) > tolerance) {
-    throw new SignatureInvalid('stale or malformed signature');
-  }
+  if (!/^[0-9]+$/.test(stamp)) throw new SignatureInvalid('malformed signature');
   const expected = Buffer.from(digest(secret, stamp, body), 'utf8');
   // Every candidate is compared in constant time, so the time taken says nothing about which.
   let matched = false;
@@ -77,6 +85,10 @@ export function verifySignature(
     if (given.length === expected.length && timingSafeEqual(given, expected)) matched = true;
   }
   if (!matched) throw new SignatureInvalid('signature does not match');
+  const current = now ?? Date.now() / 1000;
+  if (Math.abs(current - Number(stamp)) > tolerance) {
+    throw new SignatureStale('stale signature: a replay, or a clock that is minutes off');
+  }
 }
 
 /** A header from Node's `IncomingHttpHeaders`, a Fetch `Headers`, or a plain object. */

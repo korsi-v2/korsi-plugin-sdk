@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   BRIDGE_FUNCTIONS,
+  BridgeTrustError,
   BridgeVersionError,
   bridgeUrl,
   connectKorsi,
@@ -10,6 +11,7 @@ import {
   korsiOrigin,
   loadBridge,
   MESSAGES,
+  originAllowed,
   PluginApiError,
   PROTOCOL,
   type KorsiBridge,
@@ -26,8 +28,21 @@ beforeEach(() => {
 });
 
 describe('where Korsi is', () => {
-  it('is the address’s korsi_origin, normalised', () => {
-    expect(korsiOrigin(undefined, at(`?korsi_origin=${KORSI}/some/path`))).toBe(KORSI);
+  it('is the address’s korsi_origin, normalised, when the page trusts it', () => {
+    expect(korsiOrigin([KORSI], at(`?korsi_origin=${KORSI}/some/path`))).toBe(KORSI);
+    expect(korsiOrigin(['https://*.korsi.test'], at(`?korsi_origin=${KORSI}`))).toBe(KORSI);
+    expect(korsiOrigin([], at(`?korsi_origin=${KORSI}`))).toBeNull();
+  });
+
+  it('is trusted by exact origin or by a subdomain pattern, nothing looser', () => {
+    const allowed = ['https://*.korsi.test', 'https://korsi.acme.ir'];
+    expect(originAllowed('https://acme.korsi.test', allowed)).toBe(true);
+    expect(originAllowed('https://a.b.korsi.test', allowed)).toBe(true);
+    expect(originAllowed('https://korsi.acme.ir', allowed)).toBe(true);
+    expect(originAllowed('https://korsi.test', allowed)).toBe(false);
+    expect(originAllowed('https://evilkorsi.test', allowed)).toBe(false);
+    expect(originAllowed('http://acme.korsi.test', allowed)).toBe(false);
+    expect(originAllowed('https://acme.korsi.test:8443', allowed)).toBe(false);
   });
 
   it('is not believed outside the allowed origins', () => {
@@ -40,15 +55,15 @@ describe('where Korsi is', () => {
       search: `?korsi_origin=${KORSI}`,
       ancestorOrigins: ['https://evil.test'],
     } as unknown as Location;
-    expect(korsiOrigin(undefined, location)).toBeNull();
+    expect(korsiOrigin([KORSI], location)).toBeNull();
   });
 
   it('is remembered for the tab, and assumed when only one is allowed', () => {
     window.sessionStorage.setItem('korsi-bridge:origin', KORSI);
-    expect(korsiOrigin(undefined, at(''))).toBe(KORSI);
+    expect(korsiOrigin([KORSI], at(''))).toBe(KORSI);
     window.sessionStorage.clear();
     expect(korsiOrigin([KORSI], at(''))).toBe(KORSI);
-    expect(korsiOrigin(undefined, at(''))).toBeNull();
+    expect(korsiOrigin(['https://*.korsi.test'], at(''))).toBeNull();
   });
 
   it('serves its Bridge under /sdk', () => {
@@ -87,6 +102,20 @@ describe('loading the Bridge', () => {
   it('is not tried outside a frame', async () => {
     const importModule = vi.fn();
     expect(await connectKorsi({ allowedOrigins: [KORSI], importModule })).toBeNull();
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it('needs an origin the page trusts: the address alone is no proof', async () => {
+    await expect(connectKorsi({})).rejects.toBeInstanceOf(BridgeTrustError);
+  });
+
+  it('never runs code from a site that framed the page and named itself', async () => {
+    frameInKorsi();
+    window.history.replaceState({}, '', '/app?korsi_origin=https%3A%2F%2Fevil.test');
+    const importModule = vi.fn();
+    expect(
+      await connectKorsi({ allowedOrigins: ['https://*.korsi.test'], importModule })
+    ).toBeNull();
     expect(importModule).not.toHaveBeenCalled();
   });
 });

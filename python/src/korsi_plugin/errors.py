@@ -52,6 +52,7 @@ class KorsiRefused(KorsiError):
         request_id: str | None = None,
         errors: list[dict[str, Any]] | None = None,
         retry_after: float | None = None,
+        problem: bool = True,
     ) -> None:
         super().__init__(f"{status} {code}: {title or ''}".rstrip(": "))
         self.status = status
@@ -63,6 +64,9 @@ class KorsiRefused(KorsiError):
         #: Seconds to wait before asking again, when Korsi said (``429 plugin.rate_limited``: the
         #: installation spent one of its budgets -- reads, writes, sources, proposals).
         self.retry_after = retry_after
+        #: Whether Korsi itself answered (a problem document), rather than something in front of it
+        #: -- a proxy's bare 401, a WAF's 403 -- that only looks like a refusal.
+        self.problem = problem
 
     @property
     def detail(self) -> str | None:
@@ -118,12 +122,14 @@ def credential_refused(error: KorsiRefused) -> bool:
     """Whether Korsi's refusal means *this credential no longer belongs to an installation*.
 
     The only evidence a plugin should accept that it was removed: an unsigned ``removed`` message
-    could come from anybody, so a plugin believes it only once Korsi itself refuses the stored
-    token. That is a 401 (the machine user is switched off), ``plugin.not_a_plugin`` (the token no
-    longer maps to a live installation), ``plugin.installation_not_found``, or
-    ``plugin.installation_inactive`` *with state removed*. A suspended installation is refused too,
-    and comes back; a 5xx says nothing at all.
+    could come from anybody, so a plugin believes it only once Korsi itself -- its problem
+    document, not a proxy's bare status -- refuses the stored token. That is a 401 (the machine
+    user is switched off), ``plugin.not_a_plugin`` (the token no longer maps to a live
+    installation), ``plugin.installation_not_found``, or ``plugin.installation_inactive`` *with
+    state removed*. A suspended installation is refused too, and comes back; a 5xx says nothing.
     """
+    if not error.problem:
+        return False
     if error.status == 401:
         return True
     if error.code in (Code.NOT_A_PLUGIN, Code.INSTALLATION_NOT_FOUND):

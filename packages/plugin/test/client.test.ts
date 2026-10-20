@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   Code,
+  amountText,
   compareAmounts,
   isRateLimited,
   isWalletInsufficient,
@@ -63,6 +64,10 @@ describe('the plugin plane', () => {
     await expect(down.wallet()).rejects.toBeInstanceOf(KorsiUnreachable);
     korsi.gatewayDown = true;
     await expect(client().wallet()).rejects.toBeInstanceOf(KorsiUnreachable);
+    const moved = new KorsiClient(API_BASE, TOKEN, {
+      fetch: async () => new Response(null, { status: 301, headers: { location: 'https://x/' } }),
+    });
+    await expect(moved.whoami()).rejects.toBeInstanceOf(KorsiUnreachable);
   });
 
   it('reads a missing record as null and sends ids quoted', async () => {
@@ -150,6 +155,16 @@ describe('the plugin plane', () => {
     expect(compareAmounts('0.1', '0.10')).toBe(0);
     expect(compareAmounts('-1.5', '1')).toBe(-1);
     expect(compareAmounts(2n, '1.999999')).toBe(1);
+    // Korsi's Numeric(28,10), as pydantic writes it.
+    expect(compareAmounts('0E-10', '0')).toBe(0);
+    expect(compareAmounts('5.000E-7', '0.0000005')).toBe(0);
+    expect(compareAmounts('1E+2', '100')).toBe(0);
+    expect(new Wallet({ ...(await client().wallet()), available: '0E-10' }).covers('1')).toBe(
+      false
+    );
+    expect(() => compareAmounts('-', '1')).toThrow(TypeError);
+    expect(() => amountText(0.1 + 0.2)).toThrow(/decimal string/);
+    expect(amountText(3)).toBe('3');
   });
 });
 

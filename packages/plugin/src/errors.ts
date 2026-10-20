@@ -54,6 +54,11 @@ export class KorsiRefused extends KorsiError {
    * installation spent one of its budgets -- reads, writes, sources, proposals).
    */
   readonly retryAfter: number | null;
+  /**
+   * Whether Korsi itself answered (a problem document), rather than something in front of it -- a
+   * proxy's bare 401, a WAF's 403 -- that only looks like a refusal.
+   */
+  readonly problem: boolean;
 
   constructor(
     status: number,
@@ -64,6 +69,7 @@ export class KorsiRefused extends KorsiError {
       requestId?: string | null;
       errors?: ProblemFieldError[];
       retryAfter?: number | null;
+      problem?: boolean;
     } = {}
   ) {
     super(`${status} ${code}${title ? `: ${title}` : ''}`);
@@ -74,6 +80,7 @@ export class KorsiRefused extends KorsiError {
     this.requestId = extra.requestId ?? null;
     this.errors = extra.errors ?? [];
     this.retryAfter = extra.retryAfter ?? null;
+    this.problem = extra.problem ?? true;
   }
 }
 
@@ -126,12 +133,14 @@ export function isRateLimited(error: unknown): boolean {
  * Whether Korsi's refusal means *this credential no longer belongs to an installation*.
  *
  * The only evidence a plugin should accept that it was removed: an unsigned `removed` message could
- * come from anybody, so a plugin believes it only once Korsi itself refuses the stored token. That
- * is a 401 (the machine user is switched off), `plugin.not_a_plugin`,
+ * come from anybody, so a plugin believes it only once Korsi itself -- its problem document, not a
+ * proxy's bare status -- refuses the stored token. That is a 401 (the machine user is switched
+ * off), `plugin.not_a_plugin`,
  * `plugin.installation_not_found`, or `plugin.installation_inactive` *with state removed*. A
  * suspended installation is refused too, and comes back; a 5xx says nothing at all.
  */
 export function credentialRefused(error: KorsiRefused): boolean {
+  if (!error.problem) return false;
   if (error.status === 401) return true;
   if (error.code === Code.notAPlugin || error.code === Code.installationNotFound) return true;
   return error.code === Code.installationInactive && error.params.state === 'removed';

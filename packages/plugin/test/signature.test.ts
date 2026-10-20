@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RequestRejected,
   SignatureInvalid,
+  SignatureStale,
   sign,
   verifySignature,
   headerValue,
@@ -29,7 +30,7 @@ describe("Korsi's signature", () => {
     const header = sign(SECRET, BODY, { now: 1000 });
     expect(() => verifySignature(SECRET, `${BODY} `, header, { now: 1010 })).toThrow(/match/);
     expect(() => verifySignature('other', BODY, header, { now: 1010 })).toThrow(SignatureInvalid);
-    expect(() => verifySignature(SECRET, BODY, header, { now: 1301 })).toThrow(/stale/);
+    expect(() => verifySignature(SECRET, BODY, header, { now: 1301 })).toThrow(SignatureStale);
     expect(() =>
       verifySignature(SECRET, BODY, sign(SECRET, BODY, { now: 2000 }), { now: 1000 })
     ).toThrow(/stale/);
@@ -45,9 +46,12 @@ describe("Korsi's signature", () => {
     }
   });
 
-  it.each(['garbage', 't=abc,v1=00', 'v1=00', 't=1000'])('refuses the malformed %s', (header) => {
-    expect(() => verifySignature(SECRET, BODY, header, { now: 1000 })).toThrow(SignatureInvalid);
-  });
+  it.each(['garbage', 't=abc,v1=00', 'v1=00', 't=1000', 't=²,v1=00', 't=1000,v1=é'])(
+    'refuses the malformed %s',
+    (header) => {
+      expect(() => verifySignature(SECRET, BODY, header, { now: 1000 })).toThrow(SignatureInvalid);
+    }
+  );
 
   it('accepts any one of several v1, as a rotation sends', () => {
     const old = sign('old-secret', BODY, { now: 1000 }).split(',')[1];

@@ -10,7 +10,13 @@ at ``developers.korsi.ai``.
 """
 
 from korsi_plugin.client import PLUGIN_API, VERSION_HEADER, Caller, KorsiClient, Quantity
-from korsi_plugin.dedupe import EventLog, MemoryEventLog, SQLiteEventLog
+from korsi_plugin.dedupe import (
+    DEFAULT_LEASE_SECONDS,
+    ClaimStatus,
+    EventLog,
+    MemoryEventLog,
+    SQLiteEventLog,
+)
 from korsi_plugin.deliveries import (
     EVENTS_PATH,
     LIFECYCLE_PATH,
@@ -36,6 +42,7 @@ from korsi_plugin.operations import ROUTES, PlaneOperations
 from korsi_plugin.plugin import (
     INSTALLATION_HEADER,
     CredentialMismatch,
+    EventInProgress,
     EventStatus,
     HandleRejected,
     InstallationStore,
@@ -50,14 +57,17 @@ from korsi_plugin.signature import (
     EVENT_ID_HEADER,
     SIGNATURE_HEADER,
     SignatureInvalid,
+    SignatureStale,
     sign,
     verify_signature,
 )
+from korsi_plugin.trust import api_base_problem
 from korsi_plugin.wallet import Reservation, Wallet, is_no_active_plan, is_wallet_insufficient
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "DEFAULT_LEASE_SECONDS",
     "DEFAULT_TOLERANCE_SECONDS",
     "EVENTS_PATH",
     "EVENT_ID_HEADER",
@@ -69,9 +79,11 @@ __all__ = [
     "TOOLS_PATH",
     "VERSION_HEADER",
     "Caller",
+    "ClaimStatus",
     "Code",
     "CredentialMismatch",
     "Event",
+    "EventInProgress",
     "EventLog",
     "EventStatus",
     "HandleRejected",
@@ -95,11 +107,13 @@ __all__ = [
     "Reservation",
     "SQLiteEventLog",
     "SignatureInvalid",
+    "SignatureStale",
     "ToolCall",
     "Topic",
     "UnknownInstallation",
     "Wallet",
     "__version__",
+    "api_base_problem",
     "credential_refused",
     "is_no_active_plan",
     "is_rate_limited",
