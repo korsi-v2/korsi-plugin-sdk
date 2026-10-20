@@ -60,12 +60,12 @@ export abstract class PlaneOperations {
   protected abstract call<T>(method: string, path: string, options?: CallOptions): Promise<T>;
 
   /** GET /actions: Work, newest first. */
-  listActions(options: { q?: string | null; status?: Array<ActionStatus> | null; openOnly?: boolean | null; assigneeId?: string | null; dueAfter?: string | Date | null; dueBefore?: string | Date | null; cursor?: string | null; limit?: number | null; } = {}): Promise<ActionPage> {
-    return this.call<ActionPage>('GET', '/actions', { params: { q: options.q, status: options.status, open_only: options.openOnly, assignee_id: options.assigneeId, due_after: options.dueAfter, due_before: options.dueBefore, cursor: options.cursor, limit: options.limit } });
+  listActions(options: { q?: string | null; status?: Array<ActionStatus> | null; openOnly?: boolean | null; assigneeId?: string | null; dueAfter?: string | Date | null; dueBefore?: string | Date | null; originPluginId?: string | null; cursor?: string | null; limit?: number | null; } = {}): Promise<ActionPage> {
+    return this.call<ActionPage>('GET', '/actions', { params: { q: options.q, status: options.status, open_only: options.openOnly, assignee_id: options.assigneeId, due_after: options.dueAfter, due_before: options.dueBefore, origin_plugin_id: options.originPluginId, cursor: options.cursor, limit: options.limit } });
   }
 
   /** Every item of `listActions`, page by page. */
-  async *iterActions(options: { q?: string | null; status?: Array<ActionStatus> | null; openOnly?: boolean | null; assigneeId?: string | null; dueAfter?: string | Date | null; dueBefore?: string | Date | null; limit?: number | null; } = {}): AsyncGenerator<ActionItem> {
+  async *iterActions(options: { q?: string | null; status?: Array<ActionStatus> | null; openOnly?: boolean | null; assigneeId?: string | null; dueAfter?: string | Date | null; dueBefore?: string | Date | null; originPluginId?: string | null; limit?: number | null; } = {}): AsyncGenerator<ActionItem> {
     let cursor: string | null = null;
     do {
       const page: ActionPage = await this.listActions({ ...options, cursor });

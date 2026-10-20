@@ -74,15 +74,15 @@ class PlaneOperations:
             params: Mapping[str, Any] | None = None,
         ) -> Any: ...
 
-    async def list_actions(self, *, q: str | None = None, status: list[ActionStatus] | None = None, open_only: bool | None = None, assignee_id: str | uuid.UUID | None = None, due_after: str | datetime | None = None, due_before: str | datetime | None = None, cursor: str | None = None, limit: int | None = None) -> ActionPage:
+    async def list_actions(self, *, q: str | None = None, status: list[ActionStatus] | None = None, open_only: bool | None = None, assignee_id: str | uuid.UUID | None = None, due_after: str | datetime | None = None, due_before: str | datetime | None = None, origin_plugin_id: str | None = None, cursor: str | None = None, limit: int | None = None) -> ActionPage:
         """GET /actions: Work, newest first."""
-        return cast(ActionPage, await self._call("GET", "/actions", params={"q": q, "status": status, "open_only": open_only, "assignee_id": assignee_id, "due_after": due_after, "due_before": due_before, "cursor": cursor, "limit": limit}))
+        return cast(ActionPage, await self._call("GET", "/actions", params={"q": q, "status": status, "open_only": open_only, "assignee_id": assignee_id, "due_after": due_after, "due_before": due_before, "origin_plugin_id": origin_plugin_id, "cursor": cursor, "limit": limit}))
 
-    async def iter_actions(self, *, q: str | None = None, status: list[ActionStatus] | None = None, open_only: bool | None = None, assignee_id: str | uuid.UUID | None = None, due_after: str | datetime | None = None, due_before: str | datetime | None = None, limit: int | None = None) -> AsyncIterator[ActionItem]:
+    async def iter_actions(self, *, q: str | None = None, status: list[ActionStatus] | None = None, open_only: bool | None = None, assignee_id: str | uuid.UUID | None = None, due_after: str | datetime | None = None, due_before: str | datetime | None = None, origin_plugin_id: str | None = None, limit: int | None = None) -> AsyncIterator[ActionItem]:
         """Every item of :meth:`list_actions`, page by page."""
         cursor: str | None = None
         while True:
-            page = await self.list_actions(q=q, status=status, open_only=open_only, assignee_id=assignee_id, due_after=due_after, due_before=due_before, limit=limit, cursor=cursor)
+            page = await self.list_actions(q=q, status=status, open_only=open_only, assignee_id=assignee_id, due_after=due_after, due_before=due_before, origin_plugin_id=origin_plugin_id, limit=limit, cursor=cursor)
             for item in page["items"]:
                 yield item
             cursor = page.get("next_cursor")

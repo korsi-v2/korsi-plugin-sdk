@@ -61,6 +61,7 @@ export interface ActionDetail {
   status: ActionStatus;
   priority: ActionPriority;
   scope: ActionScope;
+  origin_plugin_id: string | null;
   assignee_id: string | null;
   assignee_label: string | null;
   start_at: string | null;
@@ -88,6 +89,7 @@ export interface ActionItem {
   status: ActionStatus;
   priority: ActionPriority;
   scope: ActionScope;
+  origin_plugin_id: string | null;
   assignee_id: string | null;
   assignee_label: string | null;
   start_at: string | null;

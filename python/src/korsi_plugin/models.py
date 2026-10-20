@@ -67,6 +67,7 @@ class ActionDetail(TypedDict):
     status: ActionStatus
     priority: ActionPriority
     scope: ActionScope
+    origin_plugin_id: str | None
     assignee_id: str | None
     assignee_label: str | None
     start_at: str | None
@@ -95,6 +96,7 @@ class ActionItem(TypedDict):
     status: ActionStatus
     priority: ActionPriority
     scope: ActionScope
+    origin_plugin_id: str | None
     assignee_id: str | None
     assignee_label: str | None
     start_at: str | None

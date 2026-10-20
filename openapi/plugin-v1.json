@@ -1480,6 +1480,26 @@
             }
           },
           {
+            "name": "origin_plugin_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the work a plugin's accepted proposals created, by the plugin's id -- your own, to read back what people accepted from you.",
+              "title": "Origin Plugin Id"
+            },
+            "description": "Only the work a plugin's accepted proposals created, by the plugin's id -- your own, to read back what people accepted from you."
+          },
+          {
             "name": "cursor",
             "in": "query",
             "required": false,
@@ -2474,6 +2494,17 @@
           "scope": {
             "$ref": "#/components/schemas/ActionScope"
           },
+          "origin_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Plugin Id"
+          },
           "assignee_id": {
             "anyOf": [
               {
@@ -2683,6 +2714,17 @@
           },
           "scope": {
             "$ref": "#/components/schemas/ActionScope"
+          },
+          "origin_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Plugin Id"
           },
           "assignee_id": {
             "anyOf": [
