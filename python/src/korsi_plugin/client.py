@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Final, Self, cast
 from urllib.parse import quote
@@ -40,6 +41,7 @@ from korsi_plugin.models import (
     SubmitProposal,
     WalletView,
 )
+from korsi_plugin.operations import PlaneOperations
 from korsi_plugin.wallet import Reservation
 
 #: Korsi answers a person's page in well under this; a plugin that waits longer looks broken.
@@ -51,26 +53,6 @@ PLUGIN_API: Final = "1.0"
 
 #: A quantity of a service: exact, never a float.
 Quantity = Decimal | int | str
-
-#: Every route of the plane, and the method that calls it. A test holds it to Korsi's document.
-ROUTES: Final[Mapping[tuple[str, str], str]] = {
-    ("GET", "/installation"): "whoami",
-    ("GET", "/people"): "people",
-    ("GET", "/records/{type_key}"): "records",
-    ("GET", "/records/{type_key}/{external_id}"): "record",
-    ("PUT", "/records/{type_key}/{external_id}"): "put_record",
-    ("DELETE", "/records/{type_key}/{external_id}"): "delete_record",
-    ("POST", "/proposals"): "propose",
-    ("GET", "/proposals"): "proposals",
-    ("GET", "/proposals/{proposal_id}"): "proposal",
-    ("POST", "/sources"): "bring_in",
-    ("GET", "/wallet"): "wallet",
-    ("POST", "/wallet/holds"): "open_hold",
-    ("POST", "/wallet/holds/{hold_id}/settle"): "settle_hold",
-    ("POST", "/wallet/holds/{hold_id}/release"): "release_hold",
-    ("POST", "/wallet/consume"): "consume",
-    ("GET", "/events"): "events",
-}
 
 #: Korsi's codes for a status, when something in front of Korsi answered without a problem.
 _STATUS_CODES: Final[Mapping[int, str]] = {
@@ -133,8 +115,26 @@ def _amount(value: Quantity) -> str:
     return str(Decimal(value))
 
 
-class KorsiClient:
-    """The plugin plane, as one bearer."""
+def _query(value: Any) -> Any:
+    """A query value as Korsi reads it: ``true``, ISO times, ids as text, lists repeated."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, datetime | date):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID | Decimal):
+        return str(value)
+    if isinstance(value, list | tuple):
+        return [_query(item) for item in value]
+    return value
+
+
+class KorsiClient(PlaneOperations):
+    """The plugin plane, as one bearer.
+
+    The routes Korsi added after the first ones are generated (:mod:`korsi_plugin.operations`):
+    each is a method named after the function Korsi serves it with, and :data:`ROUTES` names the
+    method of every route.
+    """
 
     def __init__(
         self,
@@ -170,7 +170,7 @@ class KorsiClient:
         json: Any = None,
         params: Mapping[str, Any] | None = None,
     ) -> Any:
-        query = {key: value for key, value in (params or {}).items() if value is not None}
+        query = {key: _query(value) for key, value in (params or {}).items() if value is not None}
         try:
             response = await self._http.request(
                 method, self.api_base + path, json=json, params=query, headers=self._headers

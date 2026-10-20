@@ -8,16 +8,38 @@
     "sourceMap": false,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "jsx": "react-jsx",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "@korsi/plugin": ["./packages/plugin/src/index.ts"],
-      "@korsi/bridge": ["./packages/bridge/src/index.ts"],
-      "@korsi/plugin-ui": ["./packages/plugin-ui/src/index.ts"],
-      "@korsi/plugin-react": ["./packages/plugin-react/src/index.ts"],
-      "@korsi/plugin-react/mui": ["./packages/plugin-react/src/mui.ts"]
+      "@korsi/plugin": [
+        "./packages/plugin/src/index.ts"
+      ],
+      "@korsi/bridge": [
+        "./packages/bridge/src/index.ts"
+      ],
+      "@korsi/plugin-ui": [
+        "./packages/plugin-ui/src/index.ts"
+      ],
+      "@korsi/plugin-react": [
+        "./packages/plugin-react/src/index.ts"
+      ],
+      "@korsi/plugin-react/mui": [
+        "./packages/plugin-react/src/mui.ts"
+      ]
     }
   },
-  "include": ["packages/*/test", "vitest.config.ts"]
+  "include": [
+    "packages/*/test",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "packages/*/test/.generated"
+  ]
 }

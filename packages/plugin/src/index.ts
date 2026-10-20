@@ -18,6 +18,7 @@ export {
   type Reservation,
 } from './client.js';
 export { MemoryEventLog, type EventLog } from './dedupe.js';
+export { PlaneOperations, type CallOptions } from './operations.js';
 export {
   EVENTS_PATH,
   installationOf,

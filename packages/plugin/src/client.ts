@@ -25,7 +25,10 @@ import type {
   SubmitProposal,
   WalletView,
 } from './models.js';
+import { PlaneOperations, type CallOptions } from './operations.js';
 import { amountText, type Quantity } from './wallet.js';
+
+export { ROUTES } from './operations.js';
 
 /** Korsi answers a person's page in well under this; a plugin that waits longer looks broken. */
 export const DEFAULT_TIMEOUT_MS = 15_000;
@@ -33,26 +36,6 @@ export const DEFAULT_TIMEOUT_MS = 15_000;
 export const VERSION_HEADER = 'Korsi-Plugin-API';
 /** The plugin API this SDK was generated for. */
 export const PLUGIN_API = '1.0';
-
-/** Every route of the plane, and the method that calls it. A test holds it to Korsi's document. */
-export const ROUTES = Object.freeze({
-  'GET /installation': 'whoami',
-  'GET /people': 'people',
-  'GET /records/{type_key}': 'records',
-  'GET /records/{type_key}/{external_id}': 'record',
-  'PUT /records/{type_key}/{external_id}': 'putRecord',
-  'DELETE /records/{type_key}/{external_id}': 'deleteRecord',
-  'POST /proposals': 'propose',
-  'GET /proposals': 'proposals',
-  'GET /proposals/{proposal_id}': 'proposal',
-  'POST /sources': 'bringIn',
-  'GET /wallet': 'wallet',
-  'POST /wallet/holds': 'openHold',
-  'POST /wallet/holds/{hold_id}/settle': 'settleHold',
-  'POST /wallet/holds/{hold_id}/release': 'releaseHold',
-  'POST /wallet/consume': 'consume',
-  'GET /events': 'events',
-} as const);
 
 /** Korsi's codes for a status, when something in front of Korsi answered without a problem. */
 const STATUS_CODES: Record<number, string> = {
@@ -119,8 +102,20 @@ export interface Reservation {
 
 const id = (value: string): string => encodeURIComponent(value);
 
-/** The plugin plane, as one bearer. Cheap to make: one per bearer, per request if need be. */
-export class KorsiClient {
+/** A query value as Korsi reads it: ISO times, `true`, lists repeated. */
+function queryValues(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(queryValues);
+  if (value instanceof Date) return [value.toISOString()];
+  return [String(value)];
+}
+
+/**
+ * The plugin plane, as one bearer. Cheap to make: one per bearer, per request if need be.
+ *
+ * The routes Korsi added after the first ones are generated (`./operations.ts`): each is a method
+ * named after the function Korsi serves it with, and `ROUTES` names the method of every route.
+ */
+export class KorsiClient extends PlaneOperations {
   readonly apiBase: string;
   /** The plane's version Korsi last reported (`Korsi-Plugin-API`), once anything was asked. */
   pluginApi: string | null = null;
@@ -129,20 +124,22 @@ export class KorsiClient {
   readonly #fetch: typeof fetch;
 
   constructor(apiBase: string, bearer: string, options: KorsiClientOptions = {}) {
+    super();
     this.apiBase = apiBase.replace(/\/+$/, '');
     this.#bearer = bearer;
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
-  async #call<T>(
+  protected async call<T>(
     method: string,
     path: string,
-    { json, params }: { json?: unknown; params?: Record<string, unknown> } = {}
+    { json, params }: CallOptions = {}
   ): Promise<T> {
     const url = new URL(this.apiBase + path);
     for (const [key, value] of Object.entries(params ?? {})) {
-      if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+      if (value === undefined || value === null) continue;
+      for (const item of queryValues(value)) url.searchParams.append(key, item);
     }
     const headers: Record<string, string> = { authorization: `Bearer ${this.#bearer}` };
     if (json !== undefined) headers['content-type'] = 'application/json';
@@ -167,14 +164,14 @@ export class KorsiClient {
 
   /** Who this bearer is, and what it may do. The way to check a credential or a handle. */
   async whoami(): Promise<Caller> {
-    return callerOf(await this.#call<PluginSelf>('GET', '/installation'));
+    return callerOf(await this.call<PluginSelf>('GET', '/installation'));
   }
 
   /** Colleagues a proposal may be addressed to. Only active ones unless asked otherwise. */
   async people({ includeInactive = false }: { includeInactive?: boolean } = {}): Promise<
     Colleague[]
   > {
-    const page = await this.#call<PeoplePage>('GET', '/people');
+    const page = await this.call<PeoplePage>('GET', '/people');
     return page.items.filter((person) => includeInactive || person.status === 'active');
   }
 
@@ -185,7 +182,7 @@ export class KorsiClient {
     typeKey: string,
     { caseId, cursor, limit = 50 }: { caseId?: string; cursor?: string | null; limit?: number } = {}
   ): Promise<RecordPage> {
-    return this.#call('GET', `/records/${id(typeKey)}`, {
+    return this.call('GET', `/records/${id(typeKey)}`, {
       params: { case_id: caseId, cursor, limit },
     });
   }
@@ -206,7 +203,7 @@ export class KorsiClient {
   /** One of this plugin's records, or `null` when there is none by that id. */
   async record(typeKey: string, externalId: string): Promise<RecordView | null> {
     try {
-      return await this.#call<RecordView>('GET', `/records/${id(typeKey)}/${id(externalId)}`);
+      return await this.call<RecordView>('GET', `/records/${id(typeKey)}/${id(externalId)}`);
     } catch (error) {
       if (error instanceof KorsiRefused && error.status === 404) return null;
       throw error;
@@ -232,11 +229,11 @@ export class KorsiClient {
     if (caseId !== undefined) body.case_id = caseId;
     if (ownerUserId !== undefined) body.owner_user_id = ownerUserId;
     if (expectedVersion !== undefined) body.expected_version = expectedVersion;
-    return this.#call('PUT', `/records/${id(typeKey)}/${id(externalId)}`, { json: body });
+    return this.call('PUT', `/records/${id(typeKey)}/${id(externalId)}`, { json: body });
   }
 
   async deleteRecord(typeKey: string, externalId: string): Promise<void> {
-    await this.#call('DELETE', `/records/${id(typeKey)}/${id(externalId)}`);
+    await this.call('DELETE', `/records/${id(typeKey)}/${id(externalId)}`);
   }
 
   // -- into Korsi's own records: proposals and sources --------------------------------------------
@@ -246,15 +243,15 @@ export class KorsiClient {
    * low-risk type -- applies it; the verdict comes back as `plugin.proposal.settled`.
    */
   propose(proposal: SubmitProposal): Promise<ProposalView> {
-    return this.#call('POST', '/proposals', { json: proposal });
+    return this.call('POST', '/proposals', { json: proposal });
   }
 
   async proposals(): Promise<ProposalView[]> {
-    return (await this.#call<ProposalPage>('GET', '/proposals')).items;
+    return (await this.call<ProposalPage>('GET', '/proposals')).items;
   }
 
   proposal(proposalId: string): Promise<ProposalView> {
-    return this.#call('GET', `/proposals/${id(proposalId)}`);
+    return this.call('GET', `/proposals/${id(proposalId)}`);
   }
 
   /**
@@ -262,14 +259,14 @@ export class KorsiClient {
    * twice is the same source (`created` is false the second time).
    */
   bringIn(source: IntakeSource): Promise<IntakeResult> {
-    return this.#call('POST', '/sources', { json: source });
+    return this.call('POST', '/sources', { json: source });
   }
 
   // -- the wallet ---------------------------------------------------------------------------------
 
   /** This installation's wallet. `Wallet.of` reads its amounts exactly. */
   wallet(): Promise<WalletView> {
-    return this.#call('GET', '/wallet');
+    return this.call('GET', '/wallet');
   }
 
   /** Reserve MU before a service, at the active plan's rate. Prefer `reserve`. */
@@ -278,7 +275,7 @@ export class KorsiClient {
     quantity: Quantity,
     { idempotencyKey }: { idempotencyKey: string }
   ): Promise<HoldView> {
-    return this.#call('POST', '/wallet/holds', {
+    return this.call('POST', '/wallet/holds', {
       json: { service, quantity: amountText(quantity), idempotency_key: idempotencyKey },
     });
   }
@@ -290,12 +287,12 @@ export class KorsiClient {
   ): Promise<HoldView> {
     const body: Record<string, unknown> = { reference };
     if (quantity !== undefined) body.quantity = amountText(quantity);
-    return this.#call('POST', `/wallet/holds/${id(holdId)}/settle`, { json: body });
+    return this.call('POST', `/wallet/holds/${id(holdId)}/settle`, { json: body });
   }
 
   /** Give a reservation back: the service was not done. */
   releaseHold(holdId: string): Promise<HoldView> {
-    return this.#call('POST', `/wallet/holds/${id(holdId)}/release`);
+    return this.call('POST', `/wallet/holds/${id(holdId)}/release`);
   }
 
   /**
@@ -308,7 +305,7 @@ export class KorsiClient {
     quantity: Quantity,
     { idempotencyKey, reference }: { idempotencyKey: string; reference: string }
   ): Promise<HoldView> {
-    return this.#call('POST', '/wallet/consume', {
+    return this.call('POST', '/wallet/consume', {
       json: {
         service,
         quantity: amountText(quantity),
@@ -358,7 +355,7 @@ export class KorsiClient {
     after = 0,
     limit = 100,
   }: { after?: number; limit?: number } = {}): Promise<PluginEventPage> {
-    return this.#call('GET', '/events', { params: { after, limit } });
+    return this.call('GET', '/events', { params: { after, limit } });
   }
 
   /**

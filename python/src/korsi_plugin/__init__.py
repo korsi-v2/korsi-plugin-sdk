@@ -9,7 +9,7 @@ The design behind every rule here is Korsi's plugin architecture (ADR-0058); the
 at ``developers.korsi.ai``.
 """
 
-from korsi_plugin.client import PLUGIN_API, ROUTES, VERSION_HEADER, Caller, KorsiClient, Quantity
+from korsi_plugin.client import PLUGIN_API, VERSION_HEADER, Caller, KorsiClient, Quantity
 from korsi_plugin.dedupe import EventLog, MemoryEventLog, SQLiteEventLog
 from korsi_plugin.deliveries import (
     EVENTS_PATH,
@@ -32,6 +32,7 @@ from korsi_plugin.errors import (
     credential_refused,
     is_rate_limited,
 )
+from korsi_plugin.operations import ROUTES, PlaneOperations
 from korsi_plugin.plugin import (
     INSTALLATION_HEADER,
     CredentialMismatch,
@@ -87,6 +88,7 @@ __all__ = [
     "MalformedRequest",
     "MemoryEventLog",
     "Person",
+    "PlaneOperations",
     "Quantity",
     "Removed",
     "RequestRejected",

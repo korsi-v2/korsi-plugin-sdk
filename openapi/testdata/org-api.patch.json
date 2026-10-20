@@ -1,0 +1,471 @@
+{
+  "_comment": "Routes the plane is about to grow (the organization data API), in FastAPI's shape. Tests merge this into openapi/plugin-v1.json to prove the generator turns new routes into client methods with nothing written by hand. Not Korsi's contract: the real one arrives through scripts/sync-openapi.sh.",
+  "paths": {
+    "/plugin/v1/cases": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Cases I may see",
+        "operationId": "list_cases_plugin_v1_cases_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CaseStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasePage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cases/{case_id}": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "One case",
+        "operationId": "get_case_plugin_v1_cases__case_id__get",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cases/{case_id}/activity": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "A case's activity",
+        "operationId": "case_activity_plugin_v1_cases__case_id__activity_get",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/calendar": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Events in a window",
+        "operationId": "calendar_plugin_v1_calendar_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "To"
+            }
+          },
+          {
+            "name": "include_declined",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Declined"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarWindow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/memory/search": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Search the organization's memory",
+        "operationId": "search_memory_plugin_v1_memory_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemorySearch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryHits"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "CaseStatus": {
+      "type": "string",
+      "enum": [
+        "open",
+        "closed"
+      ],
+      "title": "CaseStatus"
+    },
+    "CaseSummary": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/CaseStatus"
+        }
+      },
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "status"
+      ],
+      "title": "CaseSummary"
+    },
+    "CasePage": {
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "title": "Items",
+          "default": []
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        }
+      },
+      "type": "object",
+      "title": "CaseSummaryPage"
+    },
+    "CaseView": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/CaseStatus"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "status"
+      ],
+      "title": "CaseView"
+    },
+    "ActivityItem": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "ActivityItem"
+    },
+    "ActivityPage": {
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ActivityItem"
+          },
+          "title": "Items",
+          "default": []
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        }
+      },
+      "type": "object",
+      "title": "ActivityItemPage"
+    },
+    "CalendarEvent": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "id",
+        "title"
+      ],
+      "title": "CalendarEvent"
+    },
+    "CalendarWindow": {
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CalendarEvent"
+          },
+          "default": []
+        }
+      },
+      "type": "object",
+      "title": "CalendarWindow"
+    },
+    "MemorySearch": {
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "integer",
+          "default": 10
+        }
+      },
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "title": "MemorySearch"
+    },
+    "MemoryHit": {
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        }
+      },
+      "type": "object",
+      "required": [
+        "text",
+        "score"
+      ],
+      "title": "MemoryHit"
+    },
+    "MemoryHits": {
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/MemoryHit"
+          },
+          "default": []
+        }
+      },
+      "type": "object",
+      "title": "MemoryHits"
+    }
+  }
+}

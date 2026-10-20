@@ -19,9 +19,15 @@ sample plugin, [`korsi-plugin-email-commitments`](../korsi-plugin-email-commitme
 ## Two rules the packages are built around
 
 **The contract is Korsi's.** `openapi/plugin-v1.json` is a copy of the plugin plane's own document
-(`/plugin/v1/openapi.json`, generated from the models Korsi validates with). Both SDKs' types are
-generated from it (`scripts/generate_models.py`), and a test in each holds the clients to it: every
-route has a method, and nothing else does. When Korsi's plane changes:
+(`/plugin/v1/openapi.json`, generated from the models Korsi validates with). Both SDKs' types *and
+calls* are generated from it (`scripts/generate_models.py`): every route is a client method named
+after the function Korsi serves it with -- `GET /cases` served by `list_cases` is `list_cases()` /
+`listCases()`, and a page with `next_cursor` also gets `iter_cases()` / `iterCases()`. Only the
+plane's first sixteen routes are wrapped by hand, in something better than the raw call
+(`whoami()` reads ids, `consume()` takes an exact quantity, `record()` is `None` when missing); the
+generator refuses to run if one of them disappears or a new name collides. A test in each SDK
+holds the clients to the document, and `openapi/testdata/org-api.patch.json` proves on a fixture
+that new routes become methods that type-check and call Korsi correctly. When Korsi's plane changes:
 
 ```bash
 scripts/sync-openapi.sh                        # from the korsi-api checkout beside this one

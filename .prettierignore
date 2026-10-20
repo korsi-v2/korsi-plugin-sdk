@@ -1,2 +1,4 @@
 # Generated from openapi/plugin-v1.json by scripts/generate_models.py.
 packages/plugin/src/models.ts
+packages/plugin/src/operations.ts
+packages/plugin/test/.generated/
