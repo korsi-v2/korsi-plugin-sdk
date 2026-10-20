@@ -8,11 +8,29 @@
  * generator's `HAND_WRITTEN` are `KorsiClient`'s own, wrapped in something better than the raw
  * call; `ROUTES` names the method of every route, either way.
  */
+import type { ActionDetail, ActionItem, ActionPage, ActionStatus, CalendarPage, CaseActivity, CaseActivityPage, CaseDetail, CaseItem, CaseLifecycle, CasePage, DecisionDetail, DecisionItem, DecisionPage, DecisionState, DocumentDetail, DocumentItem, DocumentPage, DocumentText, MeetingDetail, MeetingItem, MeetingPage, MeetingTranscript, MemoryAnswer, MemorySearchRequest, Organization, OrganizationPerson, OrganizationPersonPage } from './models.js';
 
 /** Every route of the plane, and the client method that calls it. */
 export const ROUTES = Object.freeze({
+  'GET /actions': 'listActions',
+  'GET /actions/{action_id}': 'getAction',
+  'GET /calendar': 'readCalendar',
+  'GET /cases': 'listCases',
+  'GET /cases/{case_id}': 'getCase',
+  'GET /cases/{case_id}/activity': 'listCaseActivity',
+  'GET /decisions': 'listDecisions',
+  'GET /decisions/{decision_id}': 'getDecision',
+  'GET /documents': 'listDocuments',
+  'GET /documents/{document_id}': 'getDocument',
+  'GET /documents/{document_id}/text': 'getDocumentText',
   'GET /events': 'events',
   'GET /installation': 'whoami',
+  'GET /meetings': 'listMeetings',
+  'GET /meetings/{meeting_id}': 'getMeeting',
+  'GET /meetings/{meeting_id}/transcript': 'getMeetingTranscript',
+  'POST /memory/search': 'searchMemory',
+  'GET /org': 'getOrganization',
+  'GET /org/people': 'listOrganizationPeople',
   'GET /people': 'people',
   'GET /proposals': 'proposals',
   'POST /proposals': 'propose',
@@ -40,4 +58,159 @@ const segment = (value: string): string => encodeURIComponent(value);
 /** The generated half of `KorsiClient`. */
 export abstract class PlaneOperations {
   protected abstract call<T>(method: string, path: string, options?: CallOptions): Promise<T>;
+
+  /** GET /actions: Work, newest first. */
+  listActions(options: { q?: string | null; status?: Array<ActionStatus> | null; openOnly?: boolean | null; assigneeId?: string | null; dueAfter?: string | Date | null; dueBefore?: string | Date | null; cursor?: string | null; limit?: number | null; } = {}): Promise<ActionPage> {
+    return this.call<ActionPage>('GET', '/actions', { params: { q: options.q, status: options.status, open_only: options.openOnly, assignee_id: options.assigneeId, due_after: options.dueAfter, due_before: options.dueBefore, cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listActions`, page by page. */
+  async *iterActions(options: { q?: string | null; status?: Array<ActionStatus> | null; openOnly?: boolean | null; assigneeId?: string | null; dueAfter?: string | Date | null; dueBefore?: string | Date | null; limit?: number | null; } = {}): AsyncGenerator<ActionItem> {
+    let cursor: string | null = null;
+    do {
+      const page: ActionPage = await this.listActions({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /actions/{action_id}: One piece of work. */
+  getAction(actionId: string): Promise<ActionDetail> {
+    return this.call<ActionDetail>('GET', `/actions/${segment(actionId)}`);
+  }
+
+  /** GET /calendar: A window of the calendar. */
+  readCalendar(options: { start: string | Date; end: string | Date; }): Promise<CalendarPage> {
+    return this.call<CalendarPage>('GET', '/calendar', { params: { start: options.start, end: options.end } });
+  }
+
+  /** GET /cases: Cases, newest first. */
+  listCases(options: { q?: string | null; status?: Array<CaseLifecycle> | null; openOnly?: boolean | null; ownerId?: string | null; cursor?: string | null; limit?: number | null; } = {}): Promise<CasePage> {
+    return this.call<CasePage>('GET', '/cases', { params: { q: options.q, status: options.status, open_only: options.openOnly, owner_id: options.ownerId, cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listCases`, page by page. */
+  async *iterCases(options: { q?: string | null; status?: Array<CaseLifecycle> | null; openOnly?: boolean | null; ownerId?: string | null; limit?: number | null; } = {}): AsyncGenerator<CaseItem> {
+    let cursor: string | null = null;
+    do {
+      const page: CasePage = await this.listCases({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /cases/{case_id}: One case and what it holds. */
+  getCase(caseId: string): Promise<CaseDetail> {
+    return this.call<CaseDetail>('GET', `/cases/${segment(caseId)}`);
+  }
+
+  /** GET /cases/{case_id}/activity: What happened to a case, newest first. */
+  listCaseActivity(caseId: string, options: { cursor?: string | null; limit?: number | null; } = {}): Promise<CaseActivityPage> {
+    return this.call<CaseActivityPage>('GET', `/cases/${segment(caseId)}/activity`, { params: { cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listCaseActivity`, page by page. */
+  async *iterCaseActivity(caseId: string, options: { limit?: number | null; } = {}): AsyncGenerator<CaseActivity> {
+    let cursor: string | null = null;
+    do {
+      const page: CaseActivityPage = await this.listCaseActivity(caseId, { ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /decisions: Decisions, newest first. */
+  listDecisions(options: { q?: string | null; state?: Array<DecisionState> | null; openOnly?: boolean | null; caseId?: string | null; cursor?: string | null; limit?: number | null; } = {}): Promise<DecisionPage> {
+    return this.call<DecisionPage>('GET', '/decisions', { params: { q: options.q, state: options.state, open_only: options.openOnly, case_id: options.caseId, cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listDecisions`, page by page. */
+  async *iterDecisions(options: { q?: string | null; state?: Array<DecisionState> | null; openOnly?: boolean | null; caseId?: string | null; limit?: number | null; } = {}): AsyncGenerator<DecisionItem> {
+    let cursor: string | null = null;
+    do {
+      const page: DecisionPage = await this.listDecisions({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /decisions/{decision_id}: One decision: its options, and what was decided. */
+  getDecision(decisionId: string): Promise<DecisionDetail> {
+    return this.call<DecisionDetail>('GET', `/decisions/${segment(decisionId)}`);
+  }
+
+  /** GET /documents: Documents, newest first. */
+  listDocuments(options: { q?: string | null; caseId?: string | null; cursor?: string | null; limit?: number | null; } = {}): Promise<DocumentPage> {
+    return this.call<DocumentPage>('GET', '/documents', { params: { q: options.q, case_id: options.caseId, cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listDocuments`, page by page. */
+  async *iterDocuments(options: { q?: string | null; caseId?: string | null; limit?: number | null; } = {}): AsyncGenerator<DocumentItem> {
+    let cursor: string | null = null;
+    do {
+      const page: DocumentPage = await this.listDocuments({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /documents/{document_id}: One document, without its text. */
+  getDocument(documentId: string): Promise<DocumentDetail> {
+    return this.call<DocumentDetail>('GET', `/documents/${segment(documentId)}`);
+  }
+
+  /** GET /documents/{document_id}/text: The text Korsi read out of a document. */
+  getDocumentText(documentId: string): Promise<DocumentText> {
+    return this.call<DocumentText>('GET', `/documents/${segment(documentId)}/text`);
+  }
+
+  /** GET /meetings: Meetings, newest first. */
+  listMeetings(options: { q?: string | null; caseId?: string | null; occurredFrom?: string | Date | null; occurredTo?: string | Date | null; cursor?: string | null; limit?: number | null; } = {}): Promise<MeetingPage> {
+    return this.call<MeetingPage>('GET', '/meetings', { params: { q: options.q, case_id: options.caseId, occurred_from: options.occurredFrom, occurred_to: options.occurredTo, cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listMeetings`, page by page. */
+  async *iterMeetings(options: { q?: string | null; caseId?: string | null; occurredFrom?: string | Date | null; occurredTo?: string | Date | null; limit?: number | null; } = {}): AsyncGenerator<MeetingItem> {
+    let cursor: string | null = null;
+    do {
+      const page: MeetingPage = await this.listMeetings({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /meetings/{meeting_id}: One meeting, without its words. */
+  getMeeting(meetingId: string): Promise<MeetingDetail> {
+    return this.call<MeetingDetail>('GET', `/meetings/${segment(meetingId)}`);
+  }
+
+  /** GET /meetings/{meeting_id}/transcript: What was said in a meeting. */
+  getMeetingTranscript(meetingId: string): Promise<MeetingTranscript> {
+    return this.call<MeetingTranscript>('GET', `/meetings/${segment(meetingId)}/transcript`);
+  }
+
+  /** POST /memory/search: Ask the organization's memory, on a person's behalf. */
+  searchMemory(body: MemorySearchRequest): Promise<MemoryAnswer> {
+    return this.call<MemoryAnswer>('POST', '/memory/search', { json: body });
+  }
+
+  /** GET /org: The organization: its profile and its chart. */
+  getOrganization(): Promise<Organization> {
+    return this.call<Organization>('GET', '/org');
+  }
+
+  /** GET /org/people: The people in the organization's chart. */
+  listOrganizationPeople(options: { q?: string | null; cursor?: string | null; limit?: number | null; } = {}): Promise<OrganizationPersonPage> {
+    return this.call<OrganizationPersonPage>('GET', '/org/people', { params: { q: options.q, cursor: options.cursor, limit: options.limit } });
+  }
+
+  /** Every item of `listOrganizationPeople`, page by page. */
+  async *iterOrganizationPeople(options: { q?: string | null; limit?: number | null; } = {}): AsyncGenerator<OrganizationPerson> {
+    let cursor: string | null = null;
+    do {
+      const page: OrganizationPersonPage = await this.listOrganizationPeople({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
 }

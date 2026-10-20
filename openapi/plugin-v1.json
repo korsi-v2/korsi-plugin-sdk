@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Korsi plugin API",
-    "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**Reading Korsi is MCP's.** A plugin reads cases, people, meetings, documents, the calendar and\nmemory through Korsi's MCP server with the same credential, and sees exactly the tools its scopes\ncover (section 9, \"MCP first\"). This plane serves the reads only a plugin needs: who it is, its own\nrecords, the colleagues it may address, and its event stream.\n\n**Who is calling.** Either the installation's own machine user, a ZITADEL token whose roles include\n``plugin_installation``, resolved with the installation's scopes as a ceiling -- or a person through\na sealed handle (:mod:`.handles`): the person's own token, verified again here, resolved with the\nsame ceiling, and refused unless the person is still among those the installation is shown to. A\ntoken that is neither (a person's ordinary token, an agent's) is refused: nothing on this plane is\nfor anybody but a plugin.\n\n**Budgets.** Every route spends one request from one of the installation's four budgets -- reads,\nwrites, sources, proposals (:mod:`.limits`) -- before it opens a session, and past one it is\nanswered ``429`` with ``Retry-After``.\n",
+    "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's four budgets -- reads,\nwrites, sources, proposals (:mod:`.limits`) -- before it opens a session, and past one it is\nanswered ``429`` with ``Retry-After``.\n",
     "version": "1.0"
   },
   "paths": {
@@ -940,15 +940,1907 @@
           }
         }
       }
+    },
+    "/plugin/v1/org": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: organization"
+        ],
+        "summary": "The organization: its profile and its chart",
+        "operationId": "get_organization_plugin_v1_org_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organization"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/org/people": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: organization"
+        ],
+        "summary": "The people in the organization's chart",
+        "operationId": "list_organization_people_plugin_v1_org_people_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the name.",
+              "title": "Q"
+            },
+            "description": "Words in the name."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationPersonPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cases": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: cases"
+        ],
+        "summary": "Cases, newest first",
+        "operationId": "list_cases_plugin_v1_cases_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the title.",
+              "title": "Q"
+            },
+            "description": "Words in the title."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseLifecycle"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "open_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Open Only"
+            }
+          },
+          {
+            "name": "owner_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Owner Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasePage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cases/{case_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: cases"
+        ],
+        "summary": "One case and what it holds",
+        "operationId": "get_case_plugin_v1_cases__case_id__get",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cases/{case_id}/activity": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: cases"
+        ],
+        "summary": "What happened to a case, newest first",
+        "operationId": "list_case_activity_plugin_v1_cases__case_id__activity_get",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseActivityPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/actions": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: actions"
+        ],
+        "summary": "Work, newest first",
+        "operationId": "list_actions_plugin_v1_actions_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the title.",
+              "title": "Q"
+            },
+            "description": "Words in the title."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActionStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "open_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Open Only"
+            }
+          },
+          {
+            "name": "assignee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee Id"
+            }
+          },
+          {
+            "name": "due_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Due After"
+            }
+          },
+          {
+            "name": "due_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Due Before"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/actions/{action_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: actions"
+        ],
+        "summary": "One piece of work",
+        "operationId": "get_action_plugin_v1_actions__action_id__get",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/decisions": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: decisions"
+        ],
+        "summary": "Decisions, newest first",
+        "operationId": "list_decisions_plugin_v1_decisions_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the title.",
+              "title": "Q"
+            },
+            "description": "Words in the title."
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DecisionState"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "open_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Open Only"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only what is filed under this case.",
+              "title": "Case Id"
+            },
+            "description": "Only what is filed under this case."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/decisions/{decision_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: decisions"
+        ],
+        "summary": "One decision: its options, and what was decided",
+        "operationId": "get_decision_plugin_v1_decisions__decision_id__get",
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/meetings": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: meetings"
+        ],
+        "summary": "Meetings, newest first",
+        "operationId": "list_meetings_plugin_v1_meetings_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the title.",
+              "title": "Q"
+            },
+            "description": "Words in the title."
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only what is filed under this case.",
+              "title": "Case Id"
+            },
+            "description": "Only what is filed under this case."
+          },
+          {
+            "name": "occurred_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Occurred From"
+            }
+          },
+          {
+            "name": "occurred_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Occurred To"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/meetings/{meeting_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: meetings"
+        ],
+        "summary": "One meeting, without its words",
+        "operationId": "get_meeting_plugin_v1_meetings__meeting_id__get",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/meetings/{meeting_id}/transcript": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: meetings"
+        ],
+        "summary": "What was said in a meeting",
+        "description": "Needs `meetings.transcript.read`. `404` until the audio is transcribed.",
+        "operationId": "get_meeting_transcript_plugin_v1_meetings__meeting_id__transcript_get",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingTranscript"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/documents": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: documents"
+        ],
+        "summary": "Documents, newest first",
+        "operationId": "list_documents_plugin_v1_documents_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the title.",
+              "title": "Q"
+            },
+            "description": "Words in the title."
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only what is filed under this case.",
+              "title": "Case Id"
+            },
+            "description": "Only what is filed under this case."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/documents/{document_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: documents"
+        ],
+        "summary": "One document, without its text",
+        "operationId": "get_document_plugin_v1_documents__document_id__get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/documents/{document_id}/text": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: documents"
+        ],
+        "summary": "The text Korsi read out of a document",
+        "description": "Needs `documents.text.read`. `404` until the document has been read.",
+        "operationId": "get_document_text_plugin_v1_documents__document_id__text_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentText"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/calendar": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: calendar"
+        ],
+        "summary": "A window of the calendar",
+        "description": "Events and the dated records shown beside them -- work due, cases to review, meetings -- between `start` and `end` (at most the calendar's widest window).",
+        "operationId": "read_calendar_plugin_v1_calendar_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/memory/search": {
+      "post": {
+        "tags": [
+          "plugin",
+          "plugin: memory"
+        ],
+        "summary": "Ask the organization's memory, on a person's behalf",
+        "description": "Needs `memory.search`, which only a request on a person's behalf carries (a sealed handle): the answer is the person's, every fact resolved back to a source they may see. Each fact's `source.record_id` is the meeting or document it came from.",
+        "operationId": "search_memory_plugin_v1_memory_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemorySearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryAnswer"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ActionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActionStatus"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/ActionPriority"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ActionScope"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "assignee_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Label"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "estimate_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Minutes"
+          },
+          "checklist_total": {
+            "type": "integer",
+            "title": "Checklist Total",
+            "default": 0
+          },
+          "checklist_done": {
+            "type": "integer",
+            "title": "Checklist Done",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "reporter_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporter Id"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed By"
+          },
+          "completion_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Note"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          },
+          "checklist": {
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItem"
+            },
+            "type": "array",
+            "title": "Checklist",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "priority",
+          "scope",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ActionDetail",
+        "description": "``GET /plugin/v1/actions/{id}``."
+      },
+      "ActionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActionStatus"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/ActionPriority"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ActionScope"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "assignee_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Label"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "estimate_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Minutes"
+          },
+          "checklist_total": {
+            "type": "integer",
+            "title": "Checklist Total",
+            "default": 0
+          },
+          "checklist_done": {
+            "type": "integer",
+            "title": "Checklist Done",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "priority",
+          "scope",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ActionItem",
+        "description": "A piece of work somebody owns."
+      },
+      "ActionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActionItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "ActionPage",
+        "description": "A page of actions. It may hold fewer than ``limit`` and still have a next page."
+      },
+      "ActionPriority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "normal",
+          "high",
+          "critical"
+        ],
+        "title": "ActionPriority"
+      },
+      "ActionScope": {
+        "type": "string",
+        "enum": [
+          "organizational",
+          "personal"
+        ],
+        "title": "ActionScope",
+        "description": "Whose work this is, for reporting and for visibility.\n\nPersonal actions are modelled from the start even though they are out of scope for\nthis phase's UI, because retrofitting a scope onto a table that assumed everything\nwas organizational would mean a migration and a backfill over live work."
+      },
+      "ActionStatus": {
+        "type": "string",
+        "enum": [
+          "backlog",
+          "todo",
+          "in_progress",
+          "waiting",
+          "blocked",
+          "done",
+          "cancelled"
+        ],
+        "title": "ActionStatus",
+        "description": "Where a piece of work is.\n\n``WAITING`` and ``BLOCKED`` are separate because they need different responses:\nwaiting is somebody else's turn and resolves on its own, blocked needs an\nintervention. Collapsing them is how work sits still while looking like it is\nprogressing."
+      },
       "AddressKind": {
         "type": "string",
         "enum": [
           "person",
-          "case"
+          "case",
+          "organization"
         ],
         "title": "AddressKind",
         "description": "Whom a proposal is put in front of."
@@ -961,6 +2853,1267 @@
         ],
         "title": "Authority",
         "description": "Whose authority a plugin request carries (section 8)."
+      },
+      "BlockerStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "resolved",
+          "dismissed"
+        ],
+        "title": "BlockerStatus",
+        "description": "A blocker ends by being resolved or dismissed, never by being deleted.\n\n``DISMISSED`` is not the same as ``RESOLVED``: one means the obstacle was removed, the\nother that it turned out not to be one. Losing that distinction makes a case's history\nread as though every problem got solved."
+      },
+      "CalendarItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EntryKind"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "all_day": {
+            "type": "boolean",
+            "title": "All Day",
+            "default": false
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Id"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids",
+            "default": []
+          },
+          "busy": {
+            "type": "boolean",
+            "title": "Busy",
+            "default": true
+          },
+          "withheld": {
+            "type": "boolean",
+            "title": "Withheld",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "CalendarItem",
+        "description": "An event, or a dated record shown on the calendar (an action due, a case's review).\n\n``withheld`` is an event the caller may know is there but not read: its time only."
+      },
+      "CalendarPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Window Start"
+          },
+          "window_end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Window End"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "resume_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "window_start",
+          "window_end"
+        ],
+        "title": "CalendarPage",
+        "description": "A window of the calendar.\n\n``truncated`` means the window held more than one answer carries: ask again from\n``resume_from``."
+      },
+      "CaseActivity": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CaseActivityKind"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "before": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Before",
+            "default": {}
+          },
+          "after": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "After",
+            "default": {}
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "created_at"
+        ],
+        "title": "CaseActivity",
+        "description": "One thing that happened to a case. ``before``/``after`` hold the fields that changed."
+      },
+      "CaseActivityKind": {
+        "type": "string",
+        "enum": [
+          "created",
+          "activated",
+          "updated",
+          "owner_changed",
+          "flow_changed",
+          "blocker_added",
+          "blocker_updated",
+          "blocker_closed",
+          "action_linked",
+          "action_unlinked",
+          "primary_action_set",
+          "action_completed",
+          "context_linked",
+          "context_unlinked",
+          "participant_added",
+          "participant_removed",
+          "milestone_added",
+          "milestone_achieved",
+          "note_added",
+          "review_scheduled",
+          "review_completed",
+          "resolved",
+          "reopened",
+          "cancelled",
+          "archived",
+          "split",
+          "merged",
+          "template_applied",
+          "stage_changed",
+          "checklist_changed",
+          "counterparty_set",
+          "deliverable_added",
+          "deliverable_updated",
+          "status_reported",
+          "meeting_replanned",
+          "stages_edited",
+          "stage_work_changed"
+        ],
+        "title": "CaseActivityKind",
+        "description": "What happened to a case, for its timeline."
+      },
+      "CaseActivityPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CaseActivity"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "CaseActivityPage"
+      },
+      "CaseAttention": {
+        "type": "string",
+        "enum": [
+          "healthy",
+          "needs_attention",
+          "critical"
+        ],
+        "title": "CaseAttention",
+        "description": "Whether the case is being looked after.\n\nComputed on read from ownership, next step, dates and staleness — never stored. A\nstored attention state is wrong the moment a deadline passes without anybody touching\nthe row, which is exactly the situation it is supposed to surface."
+      },
+      "CaseBlocker": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BlockerStatus"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "since"
+        ],
+        "title": "CaseBlocker"
+      },
+      "CaseDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "case_type": {
+            "$ref": "#/components/schemas/CaseType"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/CaseLifecycle"
+          },
+          "flow_state": {
+            "$ref": "#/components/schemas/CaseFlowState"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/CasePriority"
+          },
+          "attention": {
+            "$ref": "#/components/schemas/CaseAttention"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Label"
+          },
+          "stage_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Name"
+          },
+          "counterparty_entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Entity Id"
+          },
+          "counterparty_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Name"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "open_action_count": {
+            "type": "integer",
+            "title": "Open Action Count",
+            "default": 0
+          },
+          "open_blocker_count": {
+            "type": "integer",
+            "title": "Open Blocker Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expected_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Outcome"
+          },
+          "resolution_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Summary"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          },
+          "confidentiality": {
+            "$ref": "#/components/schemas/Sensitivity"
+          },
+          "waiting_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting On"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "action_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Action Ids",
+            "default": []
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/CaseBlocker"
+            },
+            "type": "array",
+            "title": "Blockers",
+            "default": []
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/CaseMilestone"
+            },
+            "type": "array",
+            "title": "Milestones",
+            "default": []
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/CaseParticipant"
+            },
+            "type": "array",
+            "title": "Participants",
+            "default": []
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/CaseNote"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
+          "status_updates": {
+            "items": {
+              "$ref": "#/components/schemas/CaseStatusUpdate"
+            },
+            "type": "array",
+            "title": "Status Updates",
+            "default": []
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/CaseLink"
+            },
+            "type": "array",
+            "title": "Links",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "case_type",
+          "lifecycle_status",
+          "flow_state",
+          "priority",
+          "attention",
+          "created_at",
+          "updated_at",
+          "confidentiality"
+        ],
+        "title": "CaseDetail",
+        "description": "``GET /plugin/v1/cases/{id}``: a case and what it holds."
+      },
+      "CaseFlowState": {
+        "type": "string",
+        "enum": [
+          "not_started",
+          "active",
+          "waiting",
+          "blocked",
+          "paused"
+        ],
+        "title": "CaseFlowState",
+        "description": "How an open case is moving right now.\n\nOnly meaningful while the lifecycle is ``OPEN``; a resolved case has no flow. The\nservice enforces that rather than leaving a stale ``active`` on closed work, because a\ndashboard counting ``active`` would otherwise include cases that finished months ago."
+      },
+      "CaseHealth": {
+        "type": "string",
+        "enum": [
+          "on_track",
+          "at_risk",
+          "off_track"
+        ],
+        "title": "CaseHealth",
+        "description": "How the person accountable says the case is going.\n\nReported, never computed. Attention (``CaseAttention``) is what the dates and signals say; this\nis the owner's judgement, which knows things no date does — that the customer went quiet, that\nthe budget is in doubt. The two are shown side by side precisely because they can disagree."
+      },
+      "CaseItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "case_type": {
+            "$ref": "#/components/schemas/CaseType"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/CaseLifecycle"
+          },
+          "flow_state": {
+            "$ref": "#/components/schemas/CaseFlowState"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/CasePriority"
+          },
+          "attention": {
+            "$ref": "#/components/schemas/CaseAttention"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Label"
+          },
+          "stage_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Name"
+          },
+          "counterparty_entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Entity Id"
+          },
+          "counterparty_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Name"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "open_action_count": {
+            "type": "integer",
+            "title": "Open Action Count",
+            "default": 0
+          },
+          "open_blocker_count": {
+            "type": "integer",
+            "title": "Open Blocker Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "case_type",
+          "lifecycle_status",
+          "flow_state",
+          "priority",
+          "attention",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CaseItem",
+        "description": "A case -- the unit the organization coordinates in -- as a list shows it."
+      },
+      "CaseLifecycle": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "open",
+          "resolved",
+          "cancelled",
+          "merged",
+          "archived"
+        ],
+        "title": "CaseLifecycle",
+        "description": "Where the case is in its life.\n\n``ARCHIVED`` is a filing state and not an outcome, which is why it is reachable only\nfrom a case that has already been resolved, cancelled or merged: archiving instead of\nresolving would record that the organization stopped looking at something without ever\nsaying how it ended.\n\n``MERGED`` is its own outcome rather than a kind of cancellation. A duplicate filed into\nanother case was not abandoned -- its work goes on under the case it names in\n``merged_into_id`` -- and reading it as \"cancelled\" told the people who opened it that the\norganization had dropped the matter. Like the other closed states it is not tracked, so it\ncarries no signals and no deadline; unlike them it cannot be reopened, because the work it\nheld now lives in another case and two live copies of it is the state merging removed."
+      },
+      "CaseLink": {
+        "properties": {
+          "link_type": {
+            "$ref": "#/components/schemas/ContextLinkType"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link_type"
+        ],
+        "title": "CaseLink",
+        "description": "Something filed under the case: a meeting, a document, a message, a link.\n\n``target_id`` is the meeting's or the document's id when it is one, readable on its own route."
+      },
+      "CaseMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MilestoneStatus"
+          },
+          "target_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target At"
+          },
+          "achieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Achieved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "CaseMilestone"
+      },
+      "CaseNote": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/CaseNoteCategory"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "author_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "text",
+          "created_at"
+        ],
+        "title": "CaseNote"
+      },
+      "CaseNoteCategory": {
+        "type": "string",
+        "enum": [
+          "general",
+          "background",
+          "incident",
+          "decision",
+          "risk"
+        ],
+        "title": "CaseNoteCategory",
+        "description": "What kind of statement a note on a case is (ADR-0020).\n\nKept from the vocabulary of the product this replaces, unchanged, because these are the\nwords the people doing this work already use.\n\nDeliberately **not** merged with :class:`ContextRelationship`. That enum qualifies a *link*\nto something stored elsewhere — evidence for, discussed in — while this says what the note\nitself does. One is a relationship, the other a speech act, and a merged list would offer a\nwriter ``discussed_in`` and ``risk`` as alternatives to each other.\n\n``BACKGROUND`` is the one that earns the whole feature: it is where an organization records\nthe history of a case that existed before Korsi did.\n\n``DECISION`` records that a choice **was** made, so the case explains itself later. A choice\nstill being weighed belongs in the Decisions register, where it gets options, criteria and an\nauthority — this is a record, that is a process."
+      },
+      "CasePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CaseItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "CasePage"
+      },
+      "CaseParticipant": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "CaseParticipant"
+      },
+      "CasePriority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "normal",
+          "high",
+          "critical"
+        ],
+        "title": "CasePriority",
+        "description": "How much the outcome matters.\n\nDistinct from attention: a normal-priority case that nobody has touched for two months\nneeds attention, and a critical one that was reviewed yesterday does not."
+      },
+      "CaseStatusUpdate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "health": {
+            "$ref": "#/components/schemas/CaseHealth"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "next_steps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Steps"
+          },
+          "asks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asks"
+          },
+          "author_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "health",
+          "summary",
+          "created_at"
+        ],
+        "title": "CaseStatusUpdate",
+        "description": "What the case's owner reported about it, newest first."
+      },
+      "CaseType": {
+        "type": "string",
+        "enum": [
+          "sales",
+          "customer_delivery",
+          "finance",
+          "hr",
+          "legal_contract",
+          "permit_license",
+          "internal_admin",
+          "product_technical",
+          "incident",
+          "decision",
+          "other"
+        ],
+        "title": "CaseType",
+        "description": "A coarse category, for defaults and filtering.\n\nNot a module and not a workflow: every type shares one lifecycle. The value exists so\na tenant can see their sales cases separately, not so the system can behave\ndifferently."
+      },
+      "ChecklistItem": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "done"
+        ],
+        "title": "ChecklistItem"
       },
       "Colleague": {
         "properties": {
@@ -1052,6 +4205,914 @@
         ],
         "title": "Consume",
         "description": "Hold and settle in one call, for a service that is done the moment it is asked for."
+      },
+      "ContextLinkType": {
+        "type": "string",
+        "enum": [
+          "meeting",
+          "document",
+          "file",
+          "message",
+          "calendar_event",
+          "person",
+          "organization",
+          "entity",
+          "external_url",
+          "other_case",
+          "other"
+        ],
+        "title": "ContextLinkType",
+        "description": "What kind of thing a Context link points at.\n\nDeliberately open-ended and mostly external: a case links to a provider file, a URL, a\nmessage or another case. The type is stored so a link can be upgraded in place rather than\nre-created when the pipeline behind its kind lands.\n\n``MEETING`` and ``DOCUMENT`` are the two kinds this table no longer stores. They are still\nmembers because rows written before the ingestion contexts existed carry them, and because\nthe case view speaks one vocabulary whichever store a related item came from -- see\n:data:`ASSIGNED_CONTEXT_KINDS`."
+      },
+      "DecisionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "decision_type": {
+            "$ref": "#/components/schemas/DecisionType"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/DecisionLifecycle"
+          },
+          "decision_state": {
+            "$ref": "#/components/schemas/DecisionState"
+          },
+          "execution_state": {
+            "$ref": "#/components/schemas/DecisionExecutionState"
+          },
+          "outcome_state": {
+            "$ref": "#/components/schemas/DecisionOutcomeState"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/DecisionPriority"
+          },
+          "impact_level": {
+            "$ref": "#/components/schemas/ImpactLevel"
+          },
+          "urgency": {
+            "$ref": "#/components/schemas/Urgency"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Label"
+          },
+          "decision_authority_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Authority Id"
+          },
+          "decision_authority_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Authority Label"
+          },
+          "target_decision_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Decision At"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids",
+            "default": []
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "problem_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem Statement"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "out_of_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Of Scope"
+          },
+          "cost_of_inaction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Of Inaction"
+          },
+          "confidentiality": {
+            "$ref": "#/components/schemas/Sensitivity"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_restricted_content": {
+            "type": "boolean",
+            "title": "Has Restricted Content",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "decision_type",
+          "lifecycle_status",
+          "decision_state",
+          "execution_state",
+          "outcome_state",
+          "priority",
+          "impact_level",
+          "urgency",
+          "created_at",
+          "updated_at",
+          "confidentiality"
+        ],
+        "title": "DecisionDetail",
+        "description": "``GET /plugin/v1/decisions/{id}``."
+      },
+      "DecisionExecutionState": {
+        "type": "string",
+        "enum": [
+          "not_applicable",
+          "not_started",
+          "planned",
+          "in_progress",
+          "blocked",
+          "paused",
+          "completed",
+          "partially_completed",
+          "rolled_back",
+          "abandoned"
+        ],
+        "title": "DecisionExecutionState",
+        "description": "Whether the choice has actually been carried out.\n\nSeparate from :class:`DecisionState` because the two fail independently: a decision can\nbe recorded and never executed, which is one of the most useful signals the register\nproduces."
+      },
+      "DecisionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "decision_type": {
+            "$ref": "#/components/schemas/DecisionType"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/DecisionLifecycle"
+          },
+          "decision_state": {
+            "$ref": "#/components/schemas/DecisionState"
+          },
+          "execution_state": {
+            "$ref": "#/components/schemas/DecisionExecutionState"
+          },
+          "outcome_state": {
+            "$ref": "#/components/schemas/DecisionOutcomeState"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/DecisionPriority"
+          },
+          "impact_level": {
+            "$ref": "#/components/schemas/ImpactLevel"
+          },
+          "urgency": {
+            "$ref": "#/components/schemas/Urgency"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Label"
+          },
+          "decision_authority_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Authority Id"
+          },
+          "decision_authority_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Authority Label"
+          },
+          "target_decision_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Decision At"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Case Ids",
+            "default": []
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "decision_type",
+          "lifecycle_status",
+          "decision_state",
+          "execution_state",
+          "outcome_state",
+          "priority",
+          "impact_level",
+          "urgency",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DecisionItem",
+        "description": "A decision the organization is making, has made, or is carrying out."
+      },
+      "DecisionLifecycle": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "open",
+          "closed",
+          "cancelled",
+          "archived"
+        ],
+        "title": "DecisionLifecycle",
+        "description": "Whether the organization is still following this decision.\n\n``ARCHIVED`` is a filing state and not an outcome, reachable only from a closed case —\nthe same rule as an Operational Case, and for the same reason: archiving instead of\nclosing would record that the organization stopped looking at a choice without ever\nsaying what it chose."
+      },
+      "DecisionOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OptionKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OptionStatus"
+          },
+          "expected_benefit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Benefit"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risks",
+            "default": []
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "status"
+        ],
+        "title": "DecisionOption"
+      },
+      "DecisionOutcome": {
+        "properties": {
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "chosen_option_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen Option Id"
+          },
+          "chosen_option_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen Option Title"
+          },
+          "conditions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Conditions",
+            "default": []
+          },
+          "decided_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Decided At"
+          },
+          "effective_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective At"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "statement",
+          "decided_at"
+        ],
+        "title": "DecisionOutcome",
+        "description": "What was decided, once it was: the statement as recorded and the option chosen."
+      },
+      "DecisionOutcomeState": {
+        "type": "string",
+        "enum": [
+          "not_due",
+          "measuring",
+          "on_track",
+          "mixed",
+          "below_expectation",
+          "above_expectation",
+          "failed",
+          "inconclusive",
+          "expired"
+        ],
+        "title": "DecisionOutcomeState",
+        "description": "What the decision produced, once it is measurable."
+      },
+      "DecisionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "DecisionPage"
+      },
+      "DecisionPriority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "normal",
+          "high",
+          "critical"
+        ],
+        "title": "DecisionPriority"
+      },
+      "DecisionState": {
+        "type": "string",
+        "enum": [
+          "captured",
+          "triaged",
+          "framing",
+          "researching",
+          "optioning",
+          "evaluating",
+          "awaiting_recommendation",
+          "awaiting_decision",
+          "conditionally_decided",
+          "decided",
+          "deferred",
+          "rejected",
+          "reopened",
+          "superseded"
+        ],
+        "title": "DecisionState",
+        "description": "How far the reasoning has got.\n\nOnly meaningful while the lifecycle is ``DRAFT`` or ``OPEN``. The sequence is not\nenforced as a strict pipeline: real decisions go back to ``framing`` when the question\nturns out to be wrong, and a model that forbade that would be describing a process\nnobody follows."
+      },
+      "DecisionType": {
+        "type": "string",
+        "enum": [
+          "strategic",
+          "investment",
+          "commercial",
+          "operational",
+          "financial",
+          "people",
+          "technology",
+          "risk",
+          "compliance",
+          "legal",
+          "product",
+          "procurement",
+          "crisis",
+          "governance",
+          "policy_exception",
+          "other"
+        ],
+        "title": "DecisionType",
+        "description": "A coarse category, for defaults, filtering and approval expectations."
+      },
+      "DocumentDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "extraction_state": {
+            "$ref": "#/components/schemas/ExtractionState"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "memory_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemorySyncState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "has_text": {
+            "type": "boolean",
+            "title": "Has Text",
+            "default": false
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "file_name",
+          "extraction_state",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DocumentDetail",
+        "description": "``GET /plugin/v1/documents/{id}``."
+      },
+      "DocumentItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "extraction_state": {
+            "$ref": "#/components/schemas/ExtractionState"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "memory_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemorySyncState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "file_name",
+          "extraction_state",
+          "created_at"
+        ],
+        "title": "DocumentItem",
+        "description": "A document, with no text from it: that is ``/documents/{id}/text``."
+      },
+      "DocumentPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "DocumentPage"
+      },
+      "DocumentText": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "version",
+          "text"
+        ],
+        "title": "DocumentText",
+        "description": "``GET /plugin/v1/documents/{id}/text``: the text Korsi read out of it, as it reads now."
+      },
+      "EntryKind": {
+        "type": "string",
+        "enum": [
+          "event",
+          "action_due",
+          "action_start",
+          "case_review",
+          "case_milestone",
+          "case_target",
+          "decision_target",
+          "decision_outcome_review",
+          "meeting"
+        ],
+        "title": "EntryKind",
+        "description": "Where a row on the calendar came from.\n\nLoad-bearing rather than decorative: an ``EVENT`` is the calendar's own record and opens its\neditor, while every other kind is a date belonging to something else and opens that object's\npage. Collapsing them would mean a click whose destination depends on data the client cannot\nsee.\n\n``EVENT`` was ``provider_event`` while the events were somebody else's.\n\nNever stored and never constrained in the database: it is computed per read, so adding a kind\nis a value here and nothing else."
+      },
+      "EventStatus": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "tentative",
+          "cancelled"
+        ],
+        "title": "EventStatus",
+        "description": "Where an event stands.\n\n``CANCELLED`` is why an enum earns its place over a boolean. A cancelled meeting is not a\ndeleted one: the slot was taken, somebody may have planned around it, and the honest thing to\nshow is a cancelled entry rather than an empty afternoon. Deleting the row asserts it never\nexisted."
+      },
+      "ExtractionState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "extracting",
+          "extracted",
+          "failed"
+        ],
+        "title": "ExtractionState",
+        "description": "How far Korsi has got with reading one document.\n\n``EXTRACTING`` is worth its own state rather than being folded into ``PENDING``.\nReaching it means an external task exists and has been paid for, so a retry must\nresume that task instead of creating a second one — and a reader watching the page\nneeds to be told the difference between \"queued behind other work\" and \"the OCR\nservice has it now\"."
       },
       "FieldError": {
         "properties": {
@@ -1153,6 +5214,16 @@
           "expires_at"
         ],
         "title": "HoldView"
+      },
+      "ImpactLevel": {
+        "type": "string",
+        "enum": [
+          "low",
+          "moderate",
+          "high",
+          "critical"
+        ],
+        "title": "ImpactLevel"
       },
       "InstallationState": {
         "type": "string",
@@ -1286,6 +5357,374 @@
         "title": "LocalizedText",
         "description": "A name or a sentence in the languages Korsi ships. At least one is required.\n\nPersian first, because it is the default language of the product; any one is accepted so a\npublisher writing in one language is not refused, and the store falls back through\n:meth:`pick`."
       },
+      "MeetingAttendee": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "MeetingAttendee"
+      },
+      "MeetingDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeetingState"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/MeetingAttendee"
+            },
+            "type": "array",
+            "title": "Attendees",
+            "default": []
+          },
+          "memory_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemorySyncState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "agenda": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agenda"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "speaker_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker Count"
+          },
+          "has_transcript": {
+            "type": "boolean",
+            "title": "Has Transcript",
+            "default": false
+          },
+          "minutes_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Document Id"
+          },
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Document Ids",
+            "default": []
+          },
+          "related_meeting_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Related Meeting Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "state",
+          "created_at"
+        ],
+        "title": "MeetingDetail",
+        "description": "``GET /plugin/v1/meetings/{id}``."
+      },
+      "MeetingItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MeetingState"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/MeetingAttendee"
+            },
+            "type": "array",
+            "title": "Attendees",
+            "default": []
+          },
+          "memory_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemorySyncState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "state",
+          "created_at"
+        ],
+        "title": "MeetingItem",
+        "description": "A meeting, with no words from it: those are ``/meetings/{id}/transcript``."
+      },
+      "MeetingPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MeetingItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "MeetingPage"
+      },
+      "MeetingState": {
+        "type": "string",
+        "enum": [
+          "awaiting_recording",
+          "processing",
+          "ready",
+          "failed"
+        ],
+        "title": "MeetingState",
+        "description": "Where a Korsi meeting has got to.\n\n``AWAITING_RECORDING`` is the state a meeting created from a calendar entry sits in, and the\nstate a meeting returns to if its only recording is detached. Distinct from ``PENDING``\nextraction: there is nothing to process yet, as opposed to something queued."
+      },
+      "MeetingTranscript": {
+        "properties": {
+          "meeting_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Meeting Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptSegment"
+            },
+            "type": "array",
+            "title": "Segments",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "meeting_id",
+          "version",
+          "text"
+        ],
+        "title": "MeetingTranscript",
+        "description": "``GET /plugin/v1/meetings/{id}/transcript``: what was said, as it reads now."
+      },
       "MembershipStatus": {
         "type": "string",
         "enum": [
@@ -1296,6 +5735,369 @@
         ],
         "title": "MembershipStatus",
         "description": "Whether a user may act inside a tenant.\n\n``REMOVED`` rather than deleting the row: membership history is what makes an\naudit entry from last year legible, and re-adding somebody must not silently\nrevive whatever their old roles were."
+      },
+      "MemoryAnswer": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryFactView"
+            },
+            "type": "array",
+            "title": "Facts"
+          },
+          "dropped_unresolved": {
+            "type": "integer",
+            "title": "Dropped Unresolved",
+            "default": 0
+          },
+          "dropped_quarantined": {
+            "type": "integer",
+            "title": "Dropped Quarantined",
+            "default": 0
+          },
+          "relevance_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevance Threshold"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "provider_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Latency Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "facts"
+        ],
+        "title": "MemoryAnswer",
+        "description": "The result of a memory search.\n\n``dropped_unresolved`` and ``dropped_quarantined`` are reported separately because they mean\ndifferent things to an operator: the first suggests drift between Korsi and the provider,\nthe second is the system correctly withholding a source that is mid-synchronisation.\n\n``facts`` lists every fact that passed the relevance cut first, then the weakly related ones\nflagged ``low_relevance``. An answer whose facts are all flagged is memory saying it has nothing\nthat answers this question -- which is an answer, and not the same one as an empty list."
+      },
+      "MemoryFactView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Provider fact id. Opaque; useful for feedback and tracing."
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "layer": {
+            "$ref": "#/components/schemas/MemoryLayer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/MemorySourceRef"
+          },
+          "occurred_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred Start"
+          },
+          "occurred_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred End"
+          },
+          "entity_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entity Names"
+          },
+          "support_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Count"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "default": false
+          },
+          "chunk": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "relevance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevance"
+          },
+          "low_relevance": {
+            "type": "boolean",
+            "title": "Low Relevance",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "layer",
+          "source"
+        ],
+        "title": "MemoryFactView",
+        "description": "One statement from memory, with its provenance resolved."
+      },
+      "MemoryLayer": {
+        "type": "string",
+        "enum": [
+          "fact",
+          "event",
+          "belief",
+          "curated"
+        ],
+        "title": "MemoryLayer",
+        "description": "How settled a piece of knowledge is.\n\nKorsi's own categories. The adapter maps these onto whatever the engine calls them,\nwhich is what keeps the provider's vocabulary out of every caller."
+      },
+      "MemorySearchRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 2,
+            "title": "Query"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryLayer"
+            },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Layers"
+          },
+          "source_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Source Kinds"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "occurred_after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred After"
+          },
+          "occurred_before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred Before"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 20
+          },
+          "budget": {
+            "type": "string",
+            "pattern": "^(low|mid|high)$",
+            "title": "Budget",
+            "default": "mid"
+          },
+          "include_chunks": {
+            "type": "boolean",
+            "title": "Include Chunks",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "MemorySearchRequest",
+        "description": "A question put to organizational memory."
+      },
+      "MemorySourceRef": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "source_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Version Id"
+          },
+          "source_kind": {
+            "type": "string",
+            "title": "Source Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "href": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Href"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "source_version_id",
+          "source_kind",
+          "title"
+        ],
+        "title": "MemorySourceRef",
+        "description": "Where a fact came from, resolved against Korsi rather than trusted from the provider.\n\nEvery field here is read from Korsi's own tables after the provider answers. The provider's\nmetadata is not used for any of it: it is data the provider returns, so treating it as proof\nof provenance would make a bank misconfiguration a cross-tenant leak."
+      },
+      "MemorySyncState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "applied",
+          "unknown",
+          "failed",
+          "blocked",
+          "deleted"
+        ],
+        "title": "MemorySyncState",
+        "description": "Where this source stands with the provider.\n\n``UNKNOWN`` is the state this enum exists for. Every other value is a fact; ``UNKNOWN``\nrecords the absence of one, which is exactly what a timed-out retain leaves behind when\nthe provider accepts no caller-supplied operation id. Folding it into ``FAILED`` would\ninvite a retry that could extract the same source twice; folding it into ``APPLIED``\nwould expose facts nobody verified."
+      },
+      "MilestoneStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "achieved",
+          "missed",
+          "cancelled"
+        ],
+        "title": "MilestoneStatus"
       },
       "OpenHold": {
         "properties": {
@@ -1333,6 +6135,236 @@
         ],
         "title": "OpenHold",
         "description": "Reserve MU before a service, at the active plan's rate (section 16)."
+      },
+      "OptionKind": {
+        "type": "string",
+        "enum": [
+          "do_nothing",
+          "defer",
+          "pilot",
+          "partial",
+          "full_scale",
+          "hybrid",
+          "outsource",
+          "build",
+          "buy",
+          "exit",
+          "negotiate",
+          "custom"
+        ],
+        "title": "OptionKind",
+        "description": "The shape of a course of action."
+      },
+      "OptionStatus": {
+        "type": "string",
+        "enum": [
+          "candidate",
+          "screening",
+          "eligible",
+          "ineligible",
+          "shortlisted",
+          "recommended",
+          "selected",
+          "rejected",
+          "deferred",
+          "withdrawn",
+          "not_considered_at_time"
+        ],
+        "title": "OptionStatus",
+        "description": "Where an option stands.\n\n``NOT_CONSIDERED_AT_TIME`` is the one that matters historically: an option discovered\nafterwards must be recordable without making it look as though it was on the table."
+      },
+      "Organization": {
+        "properties": {
+          "legal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Name"
+          },
+          "known_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Known Names",
+            "default": []
+          },
+          "registration_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Number"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "jurisdictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Jurisdictions",
+            "default": []
+          },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizationUnit"
+            },
+            "type": "array",
+            "title": "Units",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "Organization",
+        "description": "``GET /plugin/v1/org``: the organization as it has recorded itself, and its chart.\n\nEvery field is empty until the organization records its profile -- a fresh organization has no\nlegal name yet, and that is an answer rather than an error."
+      },
+      "OrganizationPerson": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "full_name"
+        ],
+        "title": "OrganizationPerson",
+        "description": "A person in the organization's chart. ``user_id`` is set when they use Korsi."
+      },
+      "OrganizationPersonPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizationPerson"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "OrganizationPersonPage"
+      },
+      "OrganizationUnit": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OrganizationalUnitKind"
+          },
+          "parent_unit_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Unit Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "title": "OrganizationUnit",
+        "description": "A unit of the organization's chart, as recorded today."
+      },
+      "OrganizationalUnitKind": {
+        "type": "string",
+        "enum": [
+          "division",
+          "department",
+          "team",
+          "site",
+          "other"
+        ],
+        "title": "OrganizationalUnitKind",
+        "description": "What kind of structure a unit is.\n\nA closed, deliberately short list. The temptation is to let each tenant name its own levels, and\nthat is what the custom-object platform is for; a unit kind is read by product logic, so an open\nvocabulary would make it unusable for anything but display."
+      },
+      "ParticipantRole": {
+        "type": "string",
+        "enum": [
+          "participant",
+          "watcher",
+          "reviewer",
+          "decision_maker",
+          "external_party"
+        ],
+        "title": "ParticipantRole",
+        "description": "Somebody's part in the case, beyond the single owner."
       },
       "PeoplePage": {
         "properties": {
@@ -1630,16 +6662,22 @@
             "$ref": "#/components/schemas/AddressKind"
           },
           "id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Id"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "kind",
-          "id"
+          "kind"
         ],
         "title": "ProposalAddress"
       },
@@ -1676,7 +6714,8 @@
           "action.create",
           "case.change",
           "decision.candidate",
-          "calendar.event.create"
+          "calendar.event.create",
+          "memory.finding"
         ],
         "title": "ProposalType",
         "description": "What a plugin may propose into Korsi's own records (section 11)."
@@ -2033,6 +7072,15 @@
         "title": "RecordVisibility",
         "description": "Who sees a plugin's record of a given type (decision 17)."
       },
+      "Sensitivity": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "restricted"
+        ],
+        "title": "Sensitivity",
+        "description": "``RESTRICTED`` material always requires human confirmation (ADR-0006)."
+      },
       "SettleHold": {
         "properties": {
           "reference": {
@@ -2169,6 +7217,60 @@
         ],
         "title": "SubmitProposal",
         "description": "The one envelope every plugin proposal arrives in (section 11)."
+      },
+      "TranscriptSegment": {
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "start_ms": {
+            "type": "integer",
+            "title": "Start Ms"
+          },
+          "end_ms": {
+            "type": "integer",
+            "title": "End Ms"
+          },
+          "speaker_label": {
+            "type": "string",
+            "title": "Speaker Label"
+          },
+          "speaker_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker Name"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ordinal",
+          "start_ms",
+          "end_ms",
+          "speaker_label",
+          "text"
+        ],
+        "title": "TranscriptSegment"
+      },
+      "Urgency": {
+        "type": "string",
+        "enum": [
+          "routine",
+          "time_bound",
+          "urgent",
+          "emergency"
+        ],
+        "title": "Urgency"
       },
       "ValidationError": {
         "properties": {

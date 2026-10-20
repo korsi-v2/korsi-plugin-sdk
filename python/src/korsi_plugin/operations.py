@@ -16,10 +16,29 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Final, cast
 from urllib.parse import quote
 
+from .models import ActionDetail, ActionItem, ActionPage, ActionStatus, CalendarPage, CaseActivity, CaseActivityPage, CaseDetail, CaseItem, CaseLifecycle, CasePage, DecisionDetail, DecisionItem, DecisionPage, DecisionState, DocumentDetail, DocumentItem, DocumentPage, DocumentText, MeetingDetail, MeetingItem, MeetingPage, MeetingTranscript, MemoryAnswer, MemorySearchRequest, Organization, OrganizationPerson, OrganizationPersonPage
+
 #: Every route of the plane, and the client method that calls it.
 ROUTES: Final[Mapping[tuple[str, str], str]] = {
+    ("GET", "/actions"): "list_actions",
+    ("GET", "/actions/{action_id}"): "get_action",
+    ("GET", "/calendar"): "read_calendar",
+    ("GET", "/cases"): "list_cases",
+    ("GET", "/cases/{case_id}"): "get_case",
+    ("GET", "/cases/{case_id}/activity"): "list_case_activity",
+    ("GET", "/decisions"): "list_decisions",
+    ("GET", "/decisions/{decision_id}"): "get_decision",
+    ("GET", "/documents"): "list_documents",
+    ("GET", "/documents/{document_id}"): "get_document",
+    ("GET", "/documents/{document_id}/text"): "get_document_text",
     ("GET", "/events"): "events",
     ("GET", "/installation"): "whoami",
+    ("GET", "/meetings"): "list_meetings",
+    ("GET", "/meetings/{meeting_id}"): "get_meeting",
+    ("GET", "/meetings/{meeting_id}/transcript"): "get_meeting_transcript",
+    ("POST", "/memory/search"): "search_memory",
+    ("GET", "/org"): "get_organization",
+    ("GET", "/org/people"): "list_organization_people",
     ("GET", "/people"): "people",
     ("GET", "/proposals"): "proposals",
     ("POST", "/proposals"): "propose",
@@ -54,6 +73,151 @@ class PlaneOperations:
             json: Any = None,
             params: Mapping[str, Any] | None = None,
         ) -> Any: ...
+
+    async def list_actions(self, *, q: str | None = None, status: list[ActionStatus] | None = None, open_only: bool | None = None, assignee_id: str | uuid.UUID | None = None, due_after: str | datetime | None = None, due_before: str | datetime | None = None, cursor: str | None = None, limit: int | None = None) -> ActionPage:
+        """GET /actions: Work, newest first."""
+        return cast(ActionPage, await self._call("GET", "/actions", params={"q": q, "status": status, "open_only": open_only, "assignee_id": assignee_id, "due_after": due_after, "due_before": due_before, "cursor": cursor, "limit": limit}))
+
+    async def iter_actions(self, *, q: str | None = None, status: list[ActionStatus] | None = None, open_only: bool | None = None, assignee_id: str | uuid.UUID | None = None, due_after: str | datetime | None = None, due_before: str | datetime | None = None, limit: int | None = None) -> AsyncIterator[ActionItem]:
+        """Every item of :meth:`list_actions`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_actions(q=q, status=status, open_only=open_only, assignee_id=assignee_id, due_after=due_after, due_before=due_before, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def get_action(self, action_id: str | uuid.UUID) -> ActionDetail:
+        """GET /actions/{action_id}: One piece of work."""
+        return cast(ActionDetail, await self._call("GET", f"/actions/{_segment(action_id)}"))
+
+    async def read_calendar(self, *, start: str | datetime, end: str | datetime) -> CalendarPage:
+        """GET /calendar: A window of the calendar."""
+        return cast(CalendarPage, await self._call("GET", "/calendar", params={"start": start, "end": end}))
+
+    async def list_cases(self, *, q: str | None = None, status: list[CaseLifecycle] | None = None, open_only: bool | None = None, owner_id: str | uuid.UUID | None = None, cursor: str | None = None, limit: int | None = None) -> CasePage:
+        """GET /cases: Cases, newest first."""
+        return cast(CasePage, await self._call("GET", "/cases", params={"q": q, "status": status, "open_only": open_only, "owner_id": owner_id, "cursor": cursor, "limit": limit}))
+
+    async def iter_cases(self, *, q: str | None = None, status: list[CaseLifecycle] | None = None, open_only: bool | None = None, owner_id: str | uuid.UUID | None = None, limit: int | None = None) -> AsyncIterator[CaseItem]:
+        """Every item of :meth:`list_cases`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_cases(q=q, status=status, open_only=open_only, owner_id=owner_id, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def get_case(self, case_id: str | uuid.UUID) -> CaseDetail:
+        """GET /cases/{case_id}: One case and what it holds."""
+        return cast(CaseDetail, await self._call("GET", f"/cases/{_segment(case_id)}"))
+
+    async def list_case_activity(self, case_id: str | uuid.UUID, *, cursor: str | None = None, limit: int | None = None) -> CaseActivityPage:
+        """GET /cases/{case_id}/activity: What happened to a case, newest first."""
+        return cast(CaseActivityPage, await self._call("GET", f"/cases/{_segment(case_id)}/activity", params={"cursor": cursor, "limit": limit}))
+
+    async def iter_case_activity(self, case_id: str | uuid.UUID, *, limit: int | None = None) -> AsyncIterator[CaseActivity]:
+        """Every item of :meth:`list_case_activity`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_case_activity(case_id, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def list_decisions(self, *, q: str | None = None, state: list[DecisionState] | None = None, open_only: bool | None = None, case_id: str | uuid.UUID | None = None, cursor: str | None = None, limit: int | None = None) -> DecisionPage:
+        """GET /decisions: Decisions, newest first."""
+        return cast(DecisionPage, await self._call("GET", "/decisions", params={"q": q, "state": state, "open_only": open_only, "case_id": case_id, "cursor": cursor, "limit": limit}))
+
+    async def iter_decisions(self, *, q: str | None = None, state: list[DecisionState] | None = None, open_only: bool | None = None, case_id: str | uuid.UUID | None = None, limit: int | None = None) -> AsyncIterator[DecisionItem]:
+        """Every item of :meth:`list_decisions`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_decisions(q=q, state=state, open_only=open_only, case_id=case_id, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def get_decision(self, decision_id: str | uuid.UUID) -> DecisionDetail:
+        """GET /decisions/{decision_id}: One decision: its options, and what was decided."""
+        return cast(DecisionDetail, await self._call("GET", f"/decisions/{_segment(decision_id)}"))
+
+    async def list_documents(self, *, q: str | None = None, case_id: str | uuid.UUID | None = None, cursor: str | None = None, limit: int | None = None) -> DocumentPage:
+        """GET /documents: Documents, newest first."""
+        return cast(DocumentPage, await self._call("GET", "/documents", params={"q": q, "case_id": case_id, "cursor": cursor, "limit": limit}))
+
+    async def iter_documents(self, *, q: str | None = None, case_id: str | uuid.UUID | None = None, limit: int | None = None) -> AsyncIterator[DocumentItem]:
+        """Every item of :meth:`list_documents`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_documents(q=q, case_id=case_id, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def get_document(self, document_id: str | uuid.UUID) -> DocumentDetail:
+        """GET /documents/{document_id}: One document, without its text."""
+        return cast(DocumentDetail, await self._call("GET", f"/documents/{_segment(document_id)}"))
+
+    async def get_document_text(self, document_id: str | uuid.UUID) -> DocumentText:
+        """GET /documents/{document_id}/text: The text Korsi read out of a document."""
+        return cast(DocumentText, await self._call("GET", f"/documents/{_segment(document_id)}/text"))
+
+    async def list_meetings(self, *, q: str | None = None, case_id: str | uuid.UUID | None = None, occurred_from: str | datetime | None = None, occurred_to: str | datetime | None = None, cursor: str | None = None, limit: int | None = None) -> MeetingPage:
+        """GET /meetings: Meetings, newest first."""
+        return cast(MeetingPage, await self._call("GET", "/meetings", params={"q": q, "case_id": case_id, "occurred_from": occurred_from, "occurred_to": occurred_to, "cursor": cursor, "limit": limit}))
+
+    async def iter_meetings(self, *, q: str | None = None, case_id: str | uuid.UUID | None = None, occurred_from: str | datetime | None = None, occurred_to: str | datetime | None = None, limit: int | None = None) -> AsyncIterator[MeetingItem]:
+        """Every item of :meth:`list_meetings`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_meetings(q=q, case_id=case_id, occurred_from=occurred_from, occurred_to=occurred_to, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def get_meeting(self, meeting_id: str | uuid.UUID) -> MeetingDetail:
+        """GET /meetings/{meeting_id}: One meeting, without its words."""
+        return cast(MeetingDetail, await self._call("GET", f"/meetings/{_segment(meeting_id)}"))
+
+    async def get_meeting_transcript(self, meeting_id: str | uuid.UUID) -> MeetingTranscript:
+        """GET /meetings/{meeting_id}/transcript: What was said in a meeting."""
+        return cast(MeetingTranscript, await self._call("GET", f"/meetings/{_segment(meeting_id)}/transcript"))
+
+    async def search_memory(self, body: MemorySearchRequest) -> MemoryAnswer:
+        """POST /memory/search: Ask the organization's memory, on a person's behalf."""
+        return cast(MemoryAnswer, await self._call("POST", "/memory/search", json=dict(body)))
+
+    async def get_organization(self) -> Organization:
+        """GET /org: The organization: its profile and its chart."""
+        return cast(Organization, await self._call("GET", "/org"))
+
+    async def list_organization_people(self, *, q: str | None = None, cursor: str | None = None, limit: int | None = None) -> OrganizationPersonPage:
+        """GET /org/people: The people in the organization's chart."""
+        return cast(OrganizationPersonPage, await self._call("GET", "/org/people", params={"q": q, "cursor": cursor, "limit": limit}))
+
+    async def iter_organization_people(self, *, q: str | None = None, limit: int | None = None) -> AsyncIterator[OrganizationPerson]:
+        """Every item of :meth:`list_organization_people`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_organization_people(q=q, limit=limit, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
 
 
 __all__ = ["ROUTES", "PlaneOperations"]

@@ -15,15 +15,281 @@ from typing import Any, Literal, NotRequired, TypedDict
 #: An amount: Korsi sends a decimal string, and accepts a string or a number.
 Amount = str | float
 
-AddressKind = Literal["person", "case"]
+ActionPriority = Literal["low", "normal", "high", "critical"]
+ActionScope = Literal["organizational", "personal"]
+ActionStatus = Literal["backlog", "todo", "in_progress", "waiting", "blocked", "done", "cancelled"]
+AddressKind = Literal["person", "case", "organization"]
 Authority = Literal["installation", "delegated"]
+BlockerStatus = Literal["open", "resolved", "dismissed"]
+CaseActivityKind = Literal["created", "activated", "updated", "owner_changed", "flow_changed", "blocker_added", "blocker_updated", "blocker_closed", "action_linked", "action_unlinked", "primary_action_set", "action_completed", "context_linked", "context_unlinked", "participant_added", "participant_removed", "milestone_added", "milestone_achieved", "note_added", "review_scheduled", "review_completed", "resolved", "reopened", "cancelled", "archived", "split", "merged", "template_applied", "stage_changed", "checklist_changed", "counterparty_set", "deliverable_added", "deliverable_updated", "status_reported", "meeting_replanned", "stages_edited", "stage_work_changed"]
+CaseAttention = Literal["healthy", "needs_attention", "critical"]
+CaseFlowState = Literal["not_started", "active", "waiting", "blocked", "paused"]
+CaseHealth = Literal["on_track", "at_risk", "off_track"]
+CaseLifecycle = Literal["draft", "open", "resolved", "cancelled", "merged", "archived"]
+CaseNoteCategory = Literal["general", "background", "incident", "decision", "risk"]
+CasePriority = Literal["low", "normal", "high", "critical"]
+CaseType = Literal["sales", "customer_delivery", "finance", "hr", "legal_contract", "permit_license", "internal_admin", "product_technical", "incident", "decision", "other"]
+ContextLinkType = Literal["meeting", "document", "file", "message", "calendar_event", "person", "organization", "entity", "external_url", "other_case", "other"]
+DecisionExecutionState = Literal["not_applicable", "not_started", "planned", "in_progress", "blocked", "paused", "completed", "partially_completed", "rolled_back", "abandoned"]
+DecisionLifecycle = Literal["draft", "open", "closed", "cancelled", "archived"]
+DecisionOutcomeState = Literal["not_due", "measuring", "on_track", "mixed", "below_expectation", "above_expectation", "failed", "inconclusive", "expired"]
+DecisionPriority = Literal["low", "normal", "high", "critical"]
+DecisionState = Literal["captured", "triaged", "framing", "researching", "optioning", "evaluating", "awaiting_recommendation", "awaiting_decision", "conditionally_decided", "decided", "deferred", "rejected", "reopened", "superseded"]
+DecisionType = Literal["strategic", "investment", "commercial", "operational", "financial", "people", "technology", "risk", "compliance", "legal", "product", "procurement", "crisis", "governance", "policy_exception", "other"]
+EntryKind = Literal["event", "action_due", "action_start", "case_review", "case_milestone", "case_target", "decision_target", "decision_outcome_review", "meeting"]
+EventStatus = Literal["confirmed", "tentative", "cancelled"]
+ExtractionState = Literal["pending", "extracting", "extracted", "failed"]
 HoldStatus = Literal["open", "settled", "released", "expired"]
+ImpactLevel = Literal["low", "moderate", "high", "critical"]
 InstallationState = Literal["active", "awaiting_consent", "development", "suspended", "removed"]
+MeetingState = Literal["awaiting_recording", "processing", "ready", "failed"]
 MembershipStatus = Literal["invited", "active", "suspended", "removed"]
+MemoryLayer = Literal["fact", "event", "belief", "curated"]
+MemorySyncState = Literal["pending", "running", "applied", "unknown", "failed", "blocked", "deleted"]
+MilestoneStatus = Literal["pending", "achieved", "missed", "cancelled"]
+OptionKind = Literal["do_nothing", "defer", "pilot", "partial", "full_scale", "hybrid", "outsource", "build", "buy", "exit", "negotiate", "custom"]
+OptionStatus = Literal["candidate", "screening", "eligible", "ineligible", "shortlisted", "recommended", "selected", "rejected", "deferred", "withdrawn", "not_considered_at_time"]
+OrganizationalUnitKind = Literal["division", "department", "team", "site", "other"]
+ParticipantRole = Literal["participant", "watcher", "reviewer", "decision_maker", "external_party"]
 PlanPeriod = Literal["monthly", "yearly", "once"]
 ProposalStatus = Literal["pending", "applied", "rejected", "failed", "superseded", "expired"]
-ProposalType = Literal["action.create", "case.change", "decision.candidate", "calendar.event.create"]
+ProposalType = Literal["action.create", "case.change", "decision.candidate", "calendar.event.create", "memory.finding"]
 RecordVisibility = Literal["organization", "case", "personal"]
+Sensitivity = Literal["normal", "restricted"]
+Urgency = Literal["routine", "time_bound", "urgent", "emergency"]
+
+
+class ActionDetail(TypedDict):
+    """``GET /plugin/v1/actions/{id}``."""
+
+    id: str
+    title: str
+    status: ActionStatus
+    priority: ActionPriority
+    scope: ActionScope
+    assignee_id: str | None
+    assignee_label: str | None
+    start_at: str | None
+    due_at: str | None
+    estimate_minutes: int | None
+    checklist_total: int
+    checklist_done: int
+    created_at: str
+    updated_at: str
+    description: str | None
+    reporter_id: str | None
+    completed_at: str | None
+    completed_by: str | None
+    completion_note: str | None
+    cancelled_at: str | None
+    cancellation_reason: str | None
+    checklist: list[ChecklistItem]
+    depends_on: list[str]
+
+
+class ActionItem(TypedDict):
+    """A piece of work somebody owns."""
+
+    id: str
+    title: str
+    status: ActionStatus
+    priority: ActionPriority
+    scope: ActionScope
+    assignee_id: str | None
+    assignee_label: str | None
+    start_at: str | None
+    due_at: str | None
+    estimate_minutes: int | None
+    checklist_total: int
+    checklist_done: int
+    created_at: str
+    updated_at: str
+
+
+class ActionPage(TypedDict):
+    """A page of actions. It may hold fewer than ``limit`` and still have a next page."""
+
+    items: list[ActionItem]
+    next_cursor: str | None
+
+
+class CalendarItem(TypedDict):
+    """An event, or a dated record shown on the calendar (an action due, a case's review)."""
+
+    id: str
+    kind: EntryKind
+    title: str | None
+    starts_at: str
+    ends_at: str
+    all_day: bool
+    time_zone: str | None
+    status: EventStatus | None
+    location: str | None
+    description: str | None
+    meeting_id: str | None
+    subject_id: str | None
+    owner_user_id: str | None
+    attendee_ids: list[str]
+    busy: bool
+    withheld: bool
+
+
+class CalendarPage(TypedDict):
+    """A window of the calendar."""
+
+    items: list[CalendarItem]
+    window_start: str
+    window_end: str
+    truncated: bool
+    resume_from: str | None
+
+
+class CaseActivity(TypedDict):
+    """One thing that happened to a case. ``before``/``after`` hold the fields that changed."""
+
+    id: str
+    kind: CaseActivityKind
+    actor_user_id: str | None
+    note: str | None
+    before: dict[str, Any]
+    after: dict[str, Any]
+    created_at: str
+
+
+class CaseActivityPage(TypedDict):
+    items: list[CaseActivity]
+    next_cursor: str | None
+
+
+class CaseBlocker(TypedDict):
+    id: str
+    title: str
+    description: str | None
+    status: BlockerStatus
+    owner_id: str | None
+    since: str
+    resolved_at: str | None
+
+
+class CaseDetail(TypedDict):
+    """``GET /plugin/v1/cases/{id}``: a case and what it holds."""
+
+    id: str
+    title: str
+    case_type: CaseType
+    lifecycle_status: CaseLifecycle
+    flow_state: CaseFlowState
+    priority: CasePriority
+    attention: CaseAttention
+    health: CaseHealth | None
+    owner_id: str | None
+    owner_label: str | None
+    stage_name: str | None
+    counterparty_entity_id: str | None
+    counterparty_name: str | None
+    target_date: str | None
+    next_review_at: str | None
+    open_action_count: int
+    open_blocker_count: int
+    created_at: str
+    updated_at: str
+    last_activity_at: str | None
+    description: str | None
+    expected_outcome: str | None
+    resolution_summary: str | None
+    cancellation_reason: str | None
+    confidentiality: Sensitivity
+    waiting_on: str | None
+    resolved_at: str | None
+    cancelled_at: str | None
+    action_ids: list[str]
+    blockers: list[CaseBlocker]
+    milestones: list[CaseMilestone]
+    participants: list[CaseParticipant]
+    notes: list[CaseNote]
+    status_updates: list[CaseStatusUpdate]
+    links: list[CaseLink]
+
+
+class CaseItem(TypedDict):
+    """A case -- the unit the organization coordinates in -- as a list shows it."""
+
+    id: str
+    title: str
+    case_type: CaseType
+    lifecycle_status: CaseLifecycle
+    flow_state: CaseFlowState
+    priority: CasePriority
+    attention: CaseAttention
+    health: CaseHealth | None
+    owner_id: str | None
+    owner_label: str | None
+    stage_name: str | None
+    counterparty_entity_id: str | None
+    counterparty_name: str | None
+    target_date: str | None
+    next_review_at: str | None
+    open_action_count: int
+    open_blocker_count: int
+    created_at: str
+    updated_at: str
+    last_activity_at: str | None
+
+
+class CaseLink(TypedDict):
+    """Something filed under the case: a meeting, a document, a message, a link."""
+
+    link_type: ContextLinkType
+    title: str | None
+    target_id: str | None
+    source_id: str | None
+    url: str | None
+
+
+class CaseMilestone(TypedDict):
+    id: str
+    title: str
+    status: MilestoneStatus
+    target_at: str | None
+    achieved_at: str | None
+
+
+class CaseNote(TypedDict):
+    id: str
+    category: CaseNoteCategory
+    text: str
+    author_id: str | None
+    author_label: str | None
+    created_at: str
+
+
+class CasePage(TypedDict):
+    items: list[CaseItem]
+    next_cursor: str | None
+
+
+class CaseParticipant(TypedDict):
+    role: ParticipantRole
+    user_id: str | None
+    entity_id: str | None
+    display_name: str | None
+
+
+class CaseStatusUpdate(TypedDict):
+    """What the case's owner reported about it, newest first."""
+
+    id: str
+    health: CaseHealth
+    summary: str
+    next_steps: str | None
+    asks: str | None
+    author_label: str | None
+    created_at: str
+
+
+class ChecklistItem(TypedDict):
+    title: str
+    done: bool
 
 
 class Colleague(TypedDict):
@@ -44,6 +310,133 @@ class Consume(TypedDict):
     quantity: Amount
     idempotency_key: str
     reference: str
+
+
+class DecisionDetail(TypedDict):
+    """``GET /plugin/v1/decisions/{id}``."""
+
+    id: str
+    title: str
+    question: str | None
+    decision_type: DecisionType
+    lifecycle_status: DecisionLifecycle
+    decision_state: DecisionState
+    execution_state: DecisionExecutionState
+    outcome_state: DecisionOutcomeState
+    priority: DecisionPriority
+    impact_level: ImpactLevel
+    urgency: Urgency
+    owner_id: str | None
+    owner_label: str | None
+    decision_authority_id: str | None
+    decision_authority_label: str | None
+    target_decision_at: str | None
+    case_ids: list[str]
+    created_at: str
+    updated_at: str
+    description: str | None
+    problem_statement: str | None
+    scope: str | None
+    out_of_scope: str | None
+    cost_of_inaction: str | None
+    confidentiality: Sensitivity
+    options: list[DecisionOption]
+    outcome: DecisionOutcome | None
+    has_restricted_content: bool
+
+
+class DecisionItem(TypedDict):
+    """A decision the organization is making, has made, or is carrying out."""
+
+    id: str
+    title: str
+    question: str | None
+    decision_type: DecisionType
+    lifecycle_status: DecisionLifecycle
+    decision_state: DecisionState
+    execution_state: DecisionExecutionState
+    outcome_state: DecisionOutcomeState
+    priority: DecisionPriority
+    impact_level: ImpactLevel
+    urgency: Urgency
+    owner_id: str | None
+    owner_label: str | None
+    decision_authority_id: str | None
+    decision_authority_label: str | None
+    target_decision_at: str | None
+    case_ids: list[str]
+    created_at: str
+    updated_at: str
+
+
+class DecisionOption(TypedDict):
+    id: str
+    title: str
+    description: str | None
+    kind: OptionKind
+    status: OptionStatus
+    expected_benefit: str | None
+    risks: list[str]
+    rejection_reason: str | None
+
+
+class DecisionOutcome(TypedDict):
+    """What was decided, once it was: the statement as recorded and the option chosen."""
+
+    statement: str
+    chosen_option_id: str | None
+    chosen_option_title: str | None
+    conditions: list[str]
+    decided_at: str
+    effective_at: str | None
+    review_at: str | None
+
+
+class DecisionPage(TypedDict):
+    items: list[DecisionItem]
+    next_cursor: str | None
+
+
+class DocumentDetail(TypedDict):
+    """``GET /plugin/v1/documents/{id}``."""
+
+    id: str
+    file_name: str
+    mime_type: str | None
+    case_id: str | None
+    extraction_state: ExtractionState
+    page_count: int | None
+    memory_state: MemorySyncState | None
+    created_at: str
+    url: str | None
+    has_text: bool
+    updated_at: str
+
+
+class DocumentItem(TypedDict):
+    """A document, with no text from it: that is ``/documents/{id}/text``."""
+
+    id: str
+    file_name: str
+    mime_type: str | None
+    case_id: str | None
+    extraction_state: ExtractionState
+    page_count: int | None
+    memory_state: MemorySyncState | None
+    created_at: str
+
+
+class DocumentPage(TypedDict):
+    items: list[DocumentItem]
+    next_cursor: str | None
+
+
+class DocumentText(TypedDict):
+    """``GET /plugin/v1/documents/{id}/text``: the text Korsi read out of it, as it reads now."""
+
+    document_id: str
+    version: int
+    text: str
 
 
 class FieldError(TypedDict):
@@ -91,12 +484,160 @@ class LocalizedText(TypedDict):
     ar: str | None
 
 
+class MeetingAttendee(TypedDict):
+    user_id: str | None
+    entity_id: str | None
+    name: str | None
+
+
+class MeetingDetail(TypedDict):
+    """``GET /plugin/v1/meetings/{id}``."""
+
+    id: str
+    title: str
+    state: MeetingState
+    case_id: str | None
+    occurred_at: str | None
+    ends_at: str | None
+    duration_seconds: float | None
+    attendees: list[MeetingAttendee]
+    memory_state: MemorySyncState | None
+    created_at: str
+    agenda: str | None
+    location: str | None
+    speaker_count: int | None
+    has_transcript: bool
+    minutes_document_id: str | None
+    document_ids: list[str]
+    related_meeting_ids: list[str]
+
+
+class MeetingItem(TypedDict):
+    """A meeting, with no words from it: those are ``/meetings/{id}/transcript``."""
+
+    id: str
+    title: str
+    state: MeetingState
+    case_id: str | None
+    occurred_at: str | None
+    ends_at: str | None
+    duration_seconds: float | None
+    attendees: list[MeetingAttendee]
+    memory_state: MemorySyncState | None
+    created_at: str
+
+
+class MeetingPage(TypedDict):
+    items: list[MeetingItem]
+    next_cursor: str | None
+
+
+class MeetingTranscript(TypedDict):
+    """``GET /plugin/v1/meetings/{id}/transcript``: what was said, as it reads now."""
+
+    meeting_id: str
+    version: int
+    text: str
+    segments: list[TranscriptSegment]
+
+
+class MemoryAnswer(TypedDict):
+    """The result of a memory search."""
+
+    query: str
+    facts: list[MemoryFactView]
+    dropped_unresolved: int
+    dropped_quarantined: int
+    relevance_threshold: float | None
+    truncated: bool
+    provider_latency_ms: float | None
+
+
+class MemoryFactView(TypedDict):
+    """One statement from memory, with its provenance resolved."""
+
+    #: Provider fact id. Opaque; useful for feedback and tracing.
+    id: str
+    text: str
+    layer: MemoryLayer
+    source: MemorySourceRef
+    occurred_start: str | None
+    occurred_end: str | None
+    entity_names: list[str]
+    support_count: int | None
+    stale: bool
+    chunk: str | None
+    score: float | None
+    relevance: float | None
+    low_relevance: bool
+
+
+class MemorySearchRequest(TypedDict):
+    """A question put to organizational memory."""
+
+    query: str
+    layers: NotRequired[list[MemoryLayer]]
+    source_kinds: NotRequired[list[str]]
+    as_of: NotRequired[str | None]
+    occurred_after: NotRequired[str | None]
+    occurred_before: NotRequired[str | None]
+    limit: NotRequired[int]
+    budget: NotRequired[str]
+    include_chunks: NotRequired[bool]
+
+
+class MemorySourceRef(TypedDict):
+    """Where a fact came from, resolved against Korsi rather than trusted from the provider."""
+
+    source_id: str
+    source_version_id: str
+    source_kind: str
+    title: str
+    occurred_at: str | None
+    href: str | None
+    record_id: str | None
+
+
 class OpenHold(TypedDict):
     """Reserve MU before a service, at the active plan's rate (section 16)."""
 
     service: str
     quantity: Amount
     idempotency_key: str
+
+
+class Organization(TypedDict):
+    """``GET /plugin/v1/org``: the organization as it has recorded itself, and its chart."""
+
+    legal_name: str | None
+    known_names: list[str]
+    registration_number: str | None
+    industry: str | None
+    jurisdictions: list[str]
+    units: list[OrganizationUnit]
+
+
+class OrganizationPerson(TypedDict):
+    """A person in the organization's chart. ``user_id`` is set when they use Korsi."""
+
+    id: str
+    full_name: str
+    user_id: str | None
+    entity_id: str | None
+
+
+class OrganizationPersonPage(TypedDict):
+    items: list[OrganizationPerson]
+    next_cursor: str | None
+
+
+class OrganizationUnit(TypedDict):
+    """A unit of the organization's chart, as recorded today."""
+
+    id: str
+    name: str
+    kind: OrganizationalUnitKind
+    parent_unit_id: str | None
 
 
 class PeoplePage(TypedDict):
@@ -163,7 +704,7 @@ class Problem(TypedDict):
 
 class ProposalAddress(TypedDict):
     kind: AddressKind
-    id: str
+    id: NotRequired[str | None]
 
 
 class ProposalPage(TypedDict):
@@ -248,6 +789,15 @@ class SubmitProposal(TypedDict):
     reasoning: NotRequired[str | None]
 
 
+class TranscriptSegment(TypedDict):
+    ordinal: int
+    start_ms: int
+    end_ms: int
+    speaker_label: str
+    speaker_name: str | None
+    text: str
+
+
 class WalletView(TypedDict):
     """An installation's wallet: the third layer of the organization's credit (decision 4)."""
 
@@ -263,19 +813,89 @@ class WalletView(TypedDict):
 
 __all__ = [
     "Amount",
+    "ActionDetail",
+    "ActionItem",
+    "ActionPage",
+    "ActionPriority",
+    "ActionScope",
+    "ActionStatus",
     "AddressKind",
     "Authority",
+    "BlockerStatus",
+    "CalendarItem",
+    "CalendarPage",
+    "CaseActivity",
+    "CaseActivityKind",
+    "CaseActivityPage",
+    "CaseAttention",
+    "CaseBlocker",
+    "CaseDetail",
+    "CaseFlowState",
+    "CaseHealth",
+    "CaseItem",
+    "CaseLifecycle",
+    "CaseLink",
+    "CaseMilestone",
+    "CaseNote",
+    "CaseNoteCategory",
+    "CasePage",
+    "CaseParticipant",
+    "CasePriority",
+    "CaseStatusUpdate",
+    "CaseType",
+    "ChecklistItem",
     "Colleague",
     "Consume",
+    "ContextLinkType",
+    "DecisionDetail",
+    "DecisionExecutionState",
+    "DecisionItem",
+    "DecisionLifecycle",
+    "DecisionOption",
+    "DecisionOutcome",
+    "DecisionOutcomeState",
+    "DecisionPage",
+    "DecisionPriority",
+    "DecisionState",
+    "DecisionType",
+    "DocumentDetail",
+    "DocumentItem",
+    "DocumentPage",
+    "DocumentText",
+    "EntryKind",
+    "EventStatus",
+    "ExtractionState",
     "FieldError",
     "HoldStatus",
     "HoldView",
+    "ImpactLevel",
     "InstallationState",
     "IntakeResult",
     "IntakeSource",
     "LocalizedText",
+    "MeetingAttendee",
+    "MeetingDetail",
+    "MeetingItem",
+    "MeetingPage",
+    "MeetingState",
+    "MeetingTranscript",
     "MembershipStatus",
+    "MemoryAnswer",
+    "MemoryFactView",
+    "MemoryLayer",
+    "MemorySearchRequest",
+    "MemorySourceRef",
+    "MemorySyncState",
+    "MilestoneStatus",
     "OpenHold",
+    "OptionKind",
+    "OptionStatus",
+    "Organization",
+    "OrganizationPerson",
+    "OrganizationPersonPage",
+    "OrganizationUnit",
+    "OrganizationalUnitKind",
+    "ParticipantRole",
     "PeoplePage",
     "PlanPeriod",
     "PluginEventPage",
@@ -292,8 +912,11 @@ __all__ = [
     "RecordPage",
     "RecordView",
     "RecordVisibility",
+    "Sensitivity",
     "SettleHold",
     "SourceConsent",
     "SubmitProposal",
+    "TranscriptSegment",
+    "Urgency",
     "WalletView",
 ]

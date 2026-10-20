@@ -11,15 +11,271 @@
 /** An amount: Korsi sends a decimal string, and accepts a string or a number. */
 export type Amount = string | number;
 
-export type AddressKind = "person" | "case";
+export type ActionPriority = "low" | "normal" | "high" | "critical";
+export type ActionScope = "organizational" | "personal";
+export type ActionStatus = "backlog" | "todo" | "in_progress" | "waiting" | "blocked" | "done" | "cancelled";
+export type AddressKind = "person" | "case" | "organization";
 export type Authority = "installation" | "delegated";
+export type BlockerStatus = "open" | "resolved" | "dismissed";
+export type CaseActivityKind = "created" | "activated" | "updated" | "owner_changed" | "flow_changed" | "blocker_added" | "blocker_updated" | "blocker_closed" | "action_linked" | "action_unlinked" | "primary_action_set" | "action_completed" | "context_linked" | "context_unlinked" | "participant_added" | "participant_removed" | "milestone_added" | "milestone_achieved" | "note_added" | "review_scheduled" | "review_completed" | "resolved" | "reopened" | "cancelled" | "archived" | "split" | "merged" | "template_applied" | "stage_changed" | "checklist_changed" | "counterparty_set" | "deliverable_added" | "deliverable_updated" | "status_reported" | "meeting_replanned" | "stages_edited" | "stage_work_changed";
+export type CaseAttention = "healthy" | "needs_attention" | "critical";
+export type CaseFlowState = "not_started" | "active" | "waiting" | "blocked" | "paused";
+export type CaseHealth = "on_track" | "at_risk" | "off_track";
+export type CaseLifecycle = "draft" | "open" | "resolved" | "cancelled" | "merged" | "archived";
+export type CaseNoteCategory = "general" | "background" | "incident" | "decision" | "risk";
+export type CasePriority = "low" | "normal" | "high" | "critical";
+export type CaseType = "sales" | "customer_delivery" | "finance" | "hr" | "legal_contract" | "permit_license" | "internal_admin" | "product_technical" | "incident" | "decision" | "other";
+export type ContextLinkType = "meeting" | "document" | "file" | "message" | "calendar_event" | "person" | "organization" | "entity" | "external_url" | "other_case" | "other";
+export type DecisionExecutionState = "not_applicable" | "not_started" | "planned" | "in_progress" | "blocked" | "paused" | "completed" | "partially_completed" | "rolled_back" | "abandoned";
+export type DecisionLifecycle = "draft" | "open" | "closed" | "cancelled" | "archived";
+export type DecisionOutcomeState = "not_due" | "measuring" | "on_track" | "mixed" | "below_expectation" | "above_expectation" | "failed" | "inconclusive" | "expired";
+export type DecisionPriority = "low" | "normal" | "high" | "critical";
+export type DecisionState = "captured" | "triaged" | "framing" | "researching" | "optioning" | "evaluating" | "awaiting_recommendation" | "awaiting_decision" | "conditionally_decided" | "decided" | "deferred" | "rejected" | "reopened" | "superseded";
+export type DecisionType = "strategic" | "investment" | "commercial" | "operational" | "financial" | "people" | "technology" | "risk" | "compliance" | "legal" | "product" | "procurement" | "crisis" | "governance" | "policy_exception" | "other";
+export type EntryKind = "event" | "action_due" | "action_start" | "case_review" | "case_milestone" | "case_target" | "decision_target" | "decision_outcome_review" | "meeting";
+export type EventStatus = "confirmed" | "tentative" | "cancelled";
+export type ExtractionState = "pending" | "extracting" | "extracted" | "failed";
 export type HoldStatus = "open" | "settled" | "released" | "expired";
+export type ImpactLevel = "low" | "moderate" | "high" | "critical";
 export type InstallationState = "active" | "awaiting_consent" | "development" | "suspended" | "removed";
+export type MeetingState = "awaiting_recording" | "processing" | "ready" | "failed";
 export type MembershipStatus = "invited" | "active" | "suspended" | "removed";
+export type MemoryLayer = "fact" | "event" | "belief" | "curated";
+export type MemorySyncState = "pending" | "running" | "applied" | "unknown" | "failed" | "blocked" | "deleted";
+export type MilestoneStatus = "pending" | "achieved" | "missed" | "cancelled";
+export type OptionKind = "do_nothing" | "defer" | "pilot" | "partial" | "full_scale" | "hybrid" | "outsource" | "build" | "buy" | "exit" | "negotiate" | "custom";
+export type OptionStatus = "candidate" | "screening" | "eligible" | "ineligible" | "shortlisted" | "recommended" | "selected" | "rejected" | "deferred" | "withdrawn" | "not_considered_at_time";
+export type OrganizationalUnitKind = "division" | "department" | "team" | "site" | "other";
+export type ParticipantRole = "participant" | "watcher" | "reviewer" | "decision_maker" | "external_party";
 export type PlanPeriod = "monthly" | "yearly" | "once";
 export type ProposalStatus = "pending" | "applied" | "rejected" | "failed" | "superseded" | "expired";
-export type ProposalType = "action.create" | "case.change" | "decision.candidate" | "calendar.event.create";
+export type ProposalType = "action.create" | "case.change" | "decision.candidate" | "calendar.event.create" | "memory.finding";
 export type RecordVisibility = "organization" | "case" | "personal";
+export type Sensitivity = "normal" | "restricted";
+export type Urgency = "routine" | "time_bound" | "urgent" | "emergency";
+
+/** ``GET /plugin/v1/actions/{id}``. */
+export interface ActionDetail {
+  id: string;
+  title: string;
+  status: ActionStatus;
+  priority: ActionPriority;
+  scope: ActionScope;
+  assignee_id: string | null;
+  assignee_label: string | null;
+  start_at: string | null;
+  due_at: string | null;
+  estimate_minutes: number | null;
+  checklist_total: number;
+  checklist_done: number;
+  created_at: string;
+  updated_at: string;
+  description: string | null;
+  reporter_id: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  completion_note: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  checklist: Array<ChecklistItem>;
+  depends_on: Array<string>;
+}
+
+/** A piece of work somebody owns. */
+export interface ActionItem {
+  id: string;
+  title: string;
+  status: ActionStatus;
+  priority: ActionPriority;
+  scope: ActionScope;
+  assignee_id: string | null;
+  assignee_label: string | null;
+  start_at: string | null;
+  due_at: string | null;
+  estimate_minutes: number | null;
+  checklist_total: number;
+  checklist_done: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A page of actions. It may hold fewer than ``limit`` and still have a next page. */
+export interface ActionPage {
+  items: Array<ActionItem>;
+  next_cursor: string | null;
+}
+
+/** An event, or a dated record shown on the calendar (an action due, a case's review). */
+export interface CalendarItem {
+  id: string;
+  kind: EntryKind;
+  title: string | null;
+  starts_at: string;
+  ends_at: string;
+  all_day: boolean;
+  time_zone: string | null;
+  status: EventStatus | null;
+  location: string | null;
+  description: string | null;
+  meeting_id: string | null;
+  subject_id: string | null;
+  owner_user_id: string | null;
+  attendee_ids: Array<string>;
+  busy: boolean;
+  withheld: boolean;
+}
+
+/** A window of the calendar. */
+export interface CalendarPage {
+  items: Array<CalendarItem>;
+  window_start: string;
+  window_end: string;
+  truncated: boolean;
+  resume_from: string | null;
+}
+
+/** One thing that happened to a case. ``before``/``after`` hold the fields that changed. */
+export interface CaseActivity {
+  id: string;
+  kind: CaseActivityKind;
+  actor_user_id: string | null;
+  note: string | null;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CaseActivityPage {
+  items: Array<CaseActivity>;
+  next_cursor: string | null;
+}
+
+export interface CaseBlocker {
+  id: string;
+  title: string;
+  description: string | null;
+  status: BlockerStatus;
+  owner_id: string | null;
+  since: string;
+  resolved_at: string | null;
+}
+
+/** ``GET /plugin/v1/cases/{id}``: a case and what it holds. */
+export interface CaseDetail {
+  id: string;
+  title: string;
+  case_type: CaseType;
+  lifecycle_status: CaseLifecycle;
+  flow_state: CaseFlowState;
+  priority: CasePriority;
+  attention: CaseAttention;
+  health: CaseHealth | null;
+  owner_id: string | null;
+  owner_label: string | null;
+  stage_name: string | null;
+  counterparty_entity_id: string | null;
+  counterparty_name: string | null;
+  target_date: string | null;
+  next_review_at: string | null;
+  open_action_count: number;
+  open_blocker_count: number;
+  created_at: string;
+  updated_at: string;
+  last_activity_at: string | null;
+  description: string | null;
+  expected_outcome: string | null;
+  resolution_summary: string | null;
+  cancellation_reason: string | null;
+  confidentiality: Sensitivity;
+  waiting_on: string | null;
+  resolved_at: string | null;
+  cancelled_at: string | null;
+  action_ids: Array<string>;
+  blockers: Array<CaseBlocker>;
+  milestones: Array<CaseMilestone>;
+  participants: Array<CaseParticipant>;
+  notes: Array<CaseNote>;
+  status_updates: Array<CaseStatusUpdate>;
+  links: Array<CaseLink>;
+}
+
+/** A case -- the unit the organization coordinates in -- as a list shows it. */
+export interface CaseItem {
+  id: string;
+  title: string;
+  case_type: CaseType;
+  lifecycle_status: CaseLifecycle;
+  flow_state: CaseFlowState;
+  priority: CasePriority;
+  attention: CaseAttention;
+  health: CaseHealth | null;
+  owner_id: string | null;
+  owner_label: string | null;
+  stage_name: string | null;
+  counterparty_entity_id: string | null;
+  counterparty_name: string | null;
+  target_date: string | null;
+  next_review_at: string | null;
+  open_action_count: number;
+  open_blocker_count: number;
+  created_at: string;
+  updated_at: string;
+  last_activity_at: string | null;
+}
+
+/** Something filed under the case: a meeting, a document, a message, a link. */
+export interface CaseLink {
+  link_type: ContextLinkType;
+  title: string | null;
+  target_id: string | null;
+  source_id: string | null;
+  url: string | null;
+}
+
+export interface CaseMilestone {
+  id: string;
+  title: string;
+  status: MilestoneStatus;
+  target_at: string | null;
+  achieved_at: string | null;
+}
+
+export interface CaseNote {
+  id: string;
+  category: CaseNoteCategory;
+  text: string;
+  author_id: string | null;
+  author_label: string | null;
+  created_at: string;
+}
+
+export interface CasePage {
+  items: Array<CaseItem>;
+  next_cursor: string | null;
+}
+
+export interface CaseParticipant {
+  role: ParticipantRole;
+  user_id: string | null;
+  entity_id: string | null;
+  display_name: string | null;
+}
+
+/** What the case's owner reported about it, newest first. */
+export interface CaseStatusUpdate {
+  id: string;
+  health: CaseHealth;
+  summary: string;
+  next_steps: string | null;
+  asks: string | null;
+  author_label: string | null;
+  created_at: string;
+}
+
+export interface ChecklistItem {
+  title: string;
+  done: boolean;
+}
 
 /** One person in this tenant, as a picker or a label needs them. */
 export interface Colleague {
@@ -37,6 +293,127 @@ export interface Consume {
   quantity: Amount;
   idempotency_key: string;
   reference: string;
+}
+
+/** ``GET /plugin/v1/decisions/{id}``. */
+export interface DecisionDetail {
+  id: string;
+  title: string;
+  question: string | null;
+  decision_type: DecisionType;
+  lifecycle_status: DecisionLifecycle;
+  decision_state: DecisionState;
+  execution_state: DecisionExecutionState;
+  outcome_state: DecisionOutcomeState;
+  priority: DecisionPriority;
+  impact_level: ImpactLevel;
+  urgency: Urgency;
+  owner_id: string | null;
+  owner_label: string | null;
+  decision_authority_id: string | null;
+  decision_authority_label: string | null;
+  target_decision_at: string | null;
+  case_ids: Array<string>;
+  created_at: string;
+  updated_at: string;
+  description: string | null;
+  problem_statement: string | null;
+  scope: string | null;
+  out_of_scope: string | null;
+  cost_of_inaction: string | null;
+  confidentiality: Sensitivity;
+  options: Array<DecisionOption>;
+  outcome: DecisionOutcome | null;
+  has_restricted_content: boolean;
+}
+
+/** A decision the organization is making, has made, or is carrying out. */
+export interface DecisionItem {
+  id: string;
+  title: string;
+  question: string | null;
+  decision_type: DecisionType;
+  lifecycle_status: DecisionLifecycle;
+  decision_state: DecisionState;
+  execution_state: DecisionExecutionState;
+  outcome_state: DecisionOutcomeState;
+  priority: DecisionPriority;
+  impact_level: ImpactLevel;
+  urgency: Urgency;
+  owner_id: string | null;
+  owner_label: string | null;
+  decision_authority_id: string | null;
+  decision_authority_label: string | null;
+  target_decision_at: string | null;
+  case_ids: Array<string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DecisionOption {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: OptionKind;
+  status: OptionStatus;
+  expected_benefit: string | null;
+  risks: Array<string>;
+  rejection_reason: string | null;
+}
+
+/** What was decided, once it was: the statement as recorded and the option chosen. */
+export interface DecisionOutcome {
+  statement: string;
+  chosen_option_id: string | null;
+  chosen_option_title: string | null;
+  conditions: Array<string>;
+  decided_at: string;
+  effective_at: string | null;
+  review_at: string | null;
+}
+
+export interface DecisionPage {
+  items: Array<DecisionItem>;
+  next_cursor: string | null;
+}
+
+/** ``GET /plugin/v1/documents/{id}``. */
+export interface DocumentDetail {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  case_id: string | null;
+  extraction_state: ExtractionState;
+  page_count: number | null;
+  memory_state: MemorySyncState | null;
+  created_at: string;
+  url: string | null;
+  has_text: boolean;
+  updated_at: string;
+}
+
+/** A document, with no text from it: that is ``/documents/{id}/text``. */
+export interface DocumentItem {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  case_id: string | null;
+  extraction_state: ExtractionState;
+  page_count: number | null;
+  memory_state: MemorySyncState | null;
+  created_at: string;
+}
+
+export interface DocumentPage {
+  items: Array<DocumentItem>;
+  next_cursor: string | null;
+}
+
+/** ``GET /plugin/v1/documents/{id}/text``: the text Korsi read out of it, as it reads now. */
+export interface DocumentText {
+  document_id: string;
+  version: number;
+  text: string;
 }
 
 /** One field-level validation failure. */
@@ -81,11 +458,149 @@ export interface LocalizedText {
   ar: string | null;
 }
 
+export interface MeetingAttendee {
+  user_id: string | null;
+  entity_id: string | null;
+  name: string | null;
+}
+
+/** ``GET /plugin/v1/meetings/{id}``. */
+export interface MeetingDetail {
+  id: string;
+  title: string;
+  state: MeetingState;
+  case_id: string | null;
+  occurred_at: string | null;
+  ends_at: string | null;
+  duration_seconds: number | null;
+  attendees: Array<MeetingAttendee>;
+  memory_state: MemorySyncState | null;
+  created_at: string;
+  agenda: string | null;
+  location: string | null;
+  speaker_count: number | null;
+  has_transcript: boolean;
+  minutes_document_id: string | null;
+  document_ids: Array<string>;
+  related_meeting_ids: Array<string>;
+}
+
+/** A meeting, with no words from it: those are ``/meetings/{id}/transcript``. */
+export interface MeetingItem {
+  id: string;
+  title: string;
+  state: MeetingState;
+  case_id: string | null;
+  occurred_at: string | null;
+  ends_at: string | null;
+  duration_seconds: number | null;
+  attendees: Array<MeetingAttendee>;
+  memory_state: MemorySyncState | null;
+  created_at: string;
+}
+
+export interface MeetingPage {
+  items: Array<MeetingItem>;
+  next_cursor: string | null;
+}
+
+/** ``GET /plugin/v1/meetings/{id}/transcript``: what was said, as it reads now. */
+export interface MeetingTranscript {
+  meeting_id: string;
+  version: number;
+  text: string;
+  segments: Array<TranscriptSegment>;
+}
+
+/** The result of a memory search. */
+export interface MemoryAnswer {
+  query: string;
+  facts: Array<MemoryFactView>;
+  dropped_unresolved: number;
+  dropped_quarantined: number;
+  relevance_threshold: number | null;
+  truncated: boolean;
+  provider_latency_ms: number | null;
+}
+
+/** One statement from memory, with its provenance resolved. */
+export interface MemoryFactView {
+  /** Provider fact id. Opaque; useful for feedback and tracing. */
+  id: string;
+  text: string;
+  layer: MemoryLayer;
+  source: MemorySourceRef;
+  occurred_start: string | null;
+  occurred_end: string | null;
+  entity_names: Array<string>;
+  support_count: number | null;
+  stale: boolean;
+  chunk: string | null;
+  score: number | null;
+  relevance: number | null;
+  low_relevance: boolean;
+}
+
+/** A question put to organizational memory. */
+export interface MemorySearchRequest {
+  query: string;
+  layers?: Array<MemoryLayer>;
+  source_kinds?: Array<string>;
+  as_of?: string | null;
+  occurred_after?: string | null;
+  occurred_before?: string | null;
+  limit?: number;
+  budget?: string;
+  include_chunks?: boolean;
+}
+
+/** Where a fact came from, resolved against Korsi rather than trusted from the provider. */
+export interface MemorySourceRef {
+  source_id: string;
+  source_version_id: string;
+  source_kind: string;
+  title: string;
+  occurred_at: string | null;
+  href: string | null;
+  record_id: string | null;
+}
+
 /** Reserve MU before a service, at the active plan's rate (section 16). */
 export interface OpenHold {
   service: string;
   quantity: Amount;
   idempotency_key: string;
+}
+
+/** ``GET /plugin/v1/org``: the organization as it has recorded itself, and its chart. */
+export interface Organization {
+  legal_name: string | null;
+  known_names: Array<string>;
+  registration_number: string | null;
+  industry: string | null;
+  jurisdictions: Array<string>;
+  units: Array<OrganizationUnit>;
+}
+
+/** A person in the organization's chart. ``user_id`` is set when they use Korsi. */
+export interface OrganizationPerson {
+  id: string;
+  full_name: string;
+  user_id: string | null;
+  entity_id: string | null;
+}
+
+export interface OrganizationPersonPage {
+  items: Array<OrganizationPerson>;
+  next_cursor: string | null;
+}
+
+/** A unit of the organization's chart, as recorded today. */
+export interface OrganizationUnit {
+  id: string;
+  name: string;
+  kind: OrganizationalUnitKind;
+  parent_unit_id: string | null;
 }
 
 export interface PeoplePage {
@@ -149,7 +664,7 @@ export interface Problem {
 
 export interface ProposalAddress {
   kind: AddressKind;
-  id: string;
+  id?: string | null;
 }
 
 export interface ProposalPage {
@@ -229,6 +744,15 @@ export interface SubmitProposal {
   evidence?: Array<PluginProposalEvidence>;
   confidence?: number | null;
   reasoning?: string | null;
+}
+
+export interface TranscriptSegment {
+  ordinal: number;
+  start_ms: number;
+  end_ms: number;
+  speaker_label: string;
+  speaker_name: string | null;
+  text: string;
 }
 
 /** An installation's wallet: the third layer of the organization's credit (decision 4). */
