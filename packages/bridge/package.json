@@ -1,0 +1,20 @@
+{
+  "name": "@korsi/bridge",
+  "version": "0.1.0",
+  "description": "Types and a loader for Korsi's Bridge (korsi-bridge/1): a plugin page talking to the Korsi that frames it.",
+  "keywords": ["korsi", "plugin", "bridge", "postMessage"],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

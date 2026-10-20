@@ -1,0 +1,37 @@
+{
+  "name": "@korsi/plugin-react",
+  "version": "0.1.0",
+  "description": "React for a Korsi plugin page: KorsiProvider, useKorsi, useHandle, and an MUI theme that matches Korsi.",
+  "keywords": ["korsi", "plugin", "react", "mui", "rtl"],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mui": {
+      "types": "./dist/mui.d.ts",
+      "import": "./dist/mui.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "README.md"],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@korsi/bridge": "0.1.0",
+    "@korsi/plugin-ui": "0.1.0"
+  },
+  "peerDependencies": {
+    "@mui/material": ">=6",
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "@mui/material": {
+      "optional": true
+    }
+  }
+}

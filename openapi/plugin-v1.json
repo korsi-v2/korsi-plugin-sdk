@@ -1,0 +1,2293 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Korsi plugin API",
+    "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**Reading Korsi is MCP's.** A plugin reads cases, people, meetings, documents, the calendar and\nmemory through Korsi's MCP server with the same credential, and sees exactly the tools its scopes\ncover (section 9, \"MCP first\"). This plane serves the reads only a plugin needs: who it is, its own\nrecords, the colleagues it may address, and its event stream.\n\n**Who is calling.** Either the installation's own machine user, a ZITADEL token whose roles include\n``plugin_installation``, resolved with the installation's scopes as a ceiling -- or a person through\na sealed handle (:mod:`.handles`): the person's own token, verified again here, resolved with the\nsame ceiling, and refused unless the person is still among those the installation is shown to. A\ntoken that is neither (a person's ordinary token, an agent's) is refused: nothing on this plane is\nfor anybody but a plugin.\n\n**Budgets.** Every route spends one request from one of the installation's four budgets -- reads,\nwrites, sources, proposals (:mod:`.limits`) -- before it opens a session, and past one it is\nanswered ``429`` with ``Retry-After``.\n",
+    "version": "1.0"
+  },
+  "paths": {
+    "/plugin/v1/installation": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Who am I, and what may I do",
+        "operationId": "whoami_plugin_v1_installation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginSelf"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/people": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Colleagues a proposal may address",
+        "operationId": "people_plugin_v1_people_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeoplePage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/records/{type_key}": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "My records of a type",
+        "operationId": "list_records_plugin_v1_records__type_key__get",
+        "parameters": [
+          {
+            "name": "type_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 48,
+              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+              "title": "Type Key"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/records/{type_key}/{external_id}": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "One of my records",
+        "operationId": "get_record_plugin_v1_records__type_key___external_id__get",
+        "parameters": [
+          {
+            "name": "type_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 48,
+              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+              "title": "Type Key"
+            }
+          },
+          {
+            "name": "external_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "External Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Create or replace one of my records",
+        "operationId": "put_record_plugin_v1_records__type_key___external_id__put",
+        "parameters": [
+          {
+            "name": "type_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 48,
+              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+              "title": "Type Key"
+            }
+          },
+          {
+            "name": "external_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "External Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutRecord"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Delete one of my records",
+        "operationId": "delete_record_plugin_v1_records__type_key___external_id__delete",
+        "parameters": [
+          {
+            "name": "type_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 48,
+              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+              "title": "Type Key"
+            }
+          },
+          {
+            "name": "external_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "External Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/proposals": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "What I proposed",
+        "operationId": "list_proposals_plugin_v1_proposals_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Propose a change to one of Korsi's records",
+        "operationId": "submit_plugin_v1_proposals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitProposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/proposals/{proposal_id}": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "One of my proposals",
+        "operationId": "get_proposal_plugin_v1_proposals__proposal_id__get",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/sources": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Bring a message or a document in, for a person to review",
+        "operationId": "bring_in_plugin_v1_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeResult"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/wallet": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "My wallet in this organization",
+        "operationId": "get_wallet_plugin_v1_wallet_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/wallet/holds": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Reserve MU before a service",
+        "operationId": "open_hold_plugin_v1_wallet_holds_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenHold"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/wallet/holds/{hold_id}/settle": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Spend a reservation",
+        "operationId": "settle_hold_plugin_v1_wallet_holds__hold_id__settle_post",
+        "parameters": [
+          {
+            "name": "hold_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Hold Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleHold"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/wallet/holds/{hold_id}/release": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Give a reservation back",
+        "operationId": "release_hold_plugin_v1_wallet_holds__hold_id__release_post",
+        "parameters": [
+          {
+            "name": "hold_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Hold Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/wallet/consume": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "Reserve and spend in one call",
+        "operationId": "consume_plugin_v1_wallet_consume_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Consume"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/events": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "My events, after a sequence",
+        "operationId": "list_events_plugin_v1_events_get",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "After"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginEventPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddressKind": {
+        "type": "string",
+        "enum": [
+          "person",
+          "case"
+        ],
+        "title": "AddressKind",
+        "description": "Whom a proposal is put in front of."
+      },
+      "Authority": {
+        "type": "string",
+        "enum": [
+          "installation",
+          "delegated"
+        ],
+        "title": "Authority",
+        "description": "Whose authority a plugin request carries (section 8)."
+      },
+      "Colleague": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Display name, or the email address when no name is set."
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MembershipStatus",
+            "default": "active"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "label"
+        ],
+        "title": "Colleague",
+        "description": "One person in this tenant, as a picker or a label needs them.\n\nThe shape every \"who is this\" question in the product resolves to. It exists because four\ndomains were each building it from ``app_user`` joined to ``tenant_member``, and a fifth was\nabout to: an owner picker in Operations, a voice picker in Meetings, an allocation picker in\nCommerce, and actor labels in analysis views. Four copies of one query is four chances to\nforget the status filter, and one of them had.\n\n``label`` is resolved server-side rather than sent as a name plus an email for the client to\nchoose between. Which one to show is one decision -- display name, or the address when nobody\nhas set one -- and making it here is what stops two screens showing the same person\ndifferently.\n\n``status`` is carried rather than filtered out, because the two questions this answers want\nopposite things. A picker offers only active members: a removed colleague must not be\nassignable. A label must resolve for anybody, including somebody who has left, or a case they\nused to own loses its history the day their account closes."
+      },
+      "Consume": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.]{0,63}$",
+            "title": "Service"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "service",
+          "quantity",
+          "idempotency_key",
+          "reference"
+        ],
+        "title": "Consume",
+        "description": "Hold and settle in one call, for a service that is done the moment it is asked for."
+      },
+      "FieldError": {
+        "properties": {
+          "location": {
+            "type": "string",
+            "title": "Location",
+            "description": "Dotted path to the offending field."
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Stable validation code, e.g. ``field.required``."
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location",
+          "code"
+        ],
+        "title": "FieldError",
+        "description": "One field-level validation failure."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HoldStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "settled",
+          "released",
+          "expired"
+        ],
+        "title": "HoldStatus"
+      },
+      "HoldView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "quantity": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity"
+          },
+          "amount_mu": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount Mu"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HoldStatus"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "service",
+          "quantity",
+          "amount_mu",
+          "status",
+          "expires_at"
+        ],
+        "title": "HoldView"
+      },
+      "InstallationState": {
+        "type": "string",
+        "enum": [
+          "active",
+          "awaiting_consent",
+          "development",
+          "suspended",
+          "removed"
+        ],
+        "title": "InstallationState"
+      },
+      "IntakeResult": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "created"
+        ],
+        "title": "IntakeResult"
+      },
+      "IntakeSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^(message|document)$",
+            "title": "Kind"
+          },
+          "external_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "External Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "consent": {
+            "$ref": "#/components/schemas/SourceConsent"
+          },
+          "personal": {
+            "type": "boolean",
+            "title": "Personal",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "external_id",
+          "title",
+          "text",
+          "consent"
+        ],
+        "title": "IntakeSource",
+        "description": "A message or a document a plugin brings in. It waits for a person's review (ADR-0006)."
+      },
+      "LocalizedText": {
+        "properties": {
+          "fa": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fa"
+          },
+          "en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "En"
+          },
+          "ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ar"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LocalizedText",
+        "description": "A name or a sentence in the languages Korsi ships. At least one is required.\n\nPersian first, because it is the default language of the product; any one is accepted so a\npublisher writing in one language is not refused, and the store falls back through\n:meth:`pick`."
+      },
+      "MembershipStatus": {
+        "type": "string",
+        "enum": [
+          "invited",
+          "active",
+          "suspended",
+          "removed"
+        ],
+        "title": "MembershipStatus",
+        "description": "Whether a user may act inside a tenant.\n\n``REMOVED`` rather than deleting the row: membership history is what makes an\naudit entry from last year legible, and re-adding somebody must not silently\nrevive whatever their old roles were."
+      },
+      "OpenHold": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.]{0,63}$",
+            "title": "Service"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "service",
+          "quantity",
+          "idempotency_key"
+        ],
+        "title": "OpenHold",
+        "description": "Reserve MU before a service, at the active plan's rate (section 16)."
+      },
+      "PeoplePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Colleague"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PeoplePage"
+      },
+      "PlanPeriod": {
+        "type": "string",
+        "enum": [
+          "monthly",
+          "yearly",
+          "once"
+        ],
+        "title": "PlanPeriod"
+      },
+      "PluginEventPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PluginEventView"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_after": {
+            "type": "integer",
+            "title": "Next After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "next_after"
+        ],
+        "title": "PluginEventPage"
+      },
+      "PluginEventView": {
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sequence",
+          "id",
+          "topic",
+          "occurred_at"
+        ],
+        "title": "PluginEventView",
+        "description": "One event in an installation's stream: thin, with ids, never content (section 13)."
+      },
+      "PluginProposalEvidence": {
+        "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "locator": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Locator"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PluginProposalEvidence"
+      },
+      "PluginSelf": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Installation Id"
+          },
+          "plugin_id": {
+            "type": "string",
+            "title": "Plugin Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "state": {
+            "$ref": "#/components/schemas/InstallationState"
+          },
+          "tenant_ref": {
+            "type": "string",
+            "title": "Tenant Ref"
+          },
+          "authority": {
+            "$ref": "#/components/schemas/Authority"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings"
+          },
+          "locale": {
+            "type": "string",
+            "title": "Locale"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "installation_id",
+          "plugin_id",
+          "version",
+          "state",
+          "tenant_ref",
+          "authority",
+          "scopes",
+          "settings",
+          "locale",
+          "timezone"
+        ],
+        "title": "PluginSelf",
+        "description": "``GET /plugin/v1/installation``: who the plugin is talking as, and what it may do."
+      },
+      "Problem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Problem type URI.",
+            "default": "about:blank"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Message rendered in the caller's locale."
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status",
+            "description": "HTTP status code."
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Stable machine-readable error code and i18n key."
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "Typed values the client may use to render its own message."
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "Correlates this response with server logs."
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FieldError"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors",
+            "description": "Per-field detail for validation failures."
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "status",
+          "code"
+        ],
+        "title": "Problem",
+        "description": "Error response body. Served as ``application/problem+json``.",
+        "examples": [
+          {
+            "code": "auth.forbidden",
+            "params": {},
+            "request_id": "01JQ8Z0N0000000000000000",
+            "status": 403,
+            "title": "You do not have permission to do this.",
+            "type": "about:blank"
+          }
+        ]
+      },
+      "ProposalAddress": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/AddressKind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "ProposalAddress"
+      },
+      "ProposalPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalView"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "ProposalPage"
+      },
+      "ProposalStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "applied",
+          "rejected",
+          "failed",
+          "superseded",
+          "expired"
+        ],
+        "title": "ProposalStatus",
+        "description": "ADR-0014's lifecycle, as far as a plugin's proposal travels it."
+      },
+      "ProposalType": {
+        "type": "string",
+        "enum": [
+          "action.create",
+          "case.change",
+          "decision.candidate",
+          "calendar.event.create"
+        ],
+        "title": "ProposalType",
+        "description": "What a plugin may propose into Korsi's own records (section 11)."
+      },
+      "ProposalView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "installation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Installation Id"
+          },
+          "plugin_id": {
+            "type": "string",
+            "title": "Plugin Id"
+          },
+          "plugin_names": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalizedText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProposalType"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "addressed_to": {
+            "$ref": "#/components/schemas/ProposalAddress"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/PluginProposalEvidence"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProposalStatus"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_rule": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Rule"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "installation_id",
+          "plugin_id",
+          "type",
+          "external_id",
+          "addressed_to",
+          "payload",
+          "status",
+          "created_at"
+        ],
+        "title": "ProposalView"
+      },
+      "PutRecord": {
+        "properties": {
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PutRecord",
+        "description": "Write one of the plugin's own records, keyed by the plugin's own id for it."
+      },
+      "RecordPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecordView"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "RecordPage"
+      },
+      "RecordView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "installation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Installation Id"
+          },
+          "plugin_id": {
+            "type": "string",
+            "title": "Plugin Id"
+          },
+          "type_key": {
+            "type": "string",
+            "title": "Type Key"
+          },
+          "external_id": {
+            "type": "string",
+            "title": "External Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/RecordVisibility"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "installation_id",
+          "plugin_id",
+          "type_key",
+          "external_id",
+          "data",
+          "visibility",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RecordView"
+      },
+      "RecordVisibility": {
+        "type": "string",
+        "enum": [
+          "organization",
+          "case",
+          "personal"
+        ],
+        "title": "RecordVisibility",
+        "description": "Who sees a plugin's record of a given type (decision 17)."
+      },
+      "SettleHold": {
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reference"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "title": "SettleHold"
+      },
+      "SourceConsent": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Channel"
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 320
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account"
+          },
+          "consented_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consented By"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channel"
+        ],
+        "title": "SourceConsent",
+        "description": "Who agreed to this material reaching Korsi, through which channel."
+      },
+      "SubmitProposal": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ProposalType"
+          },
+          "external_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "External Id"
+          },
+          "addressed_to": {
+            "$ref": "#/components/schemas/ProposalAddress"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/PluginProposalEvidence"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Evidence",
+            "default": []
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "external_id",
+          "addressed_to",
+          "payload"
+        ],
+        "title": "SubmitProposal",
+        "description": "The one envelope every plugin proposal arrives in (section 11)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WalletView": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Installation Id"
+          },
+          "plan_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Key"
+          },
+          "plan_period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "period_ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Ends At"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance"
+          },
+          "reserved": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Reserved"
+          },
+          "available": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Available"
+          },
+          "consumed_this_period": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Consumed This Period"
+          },
+          "credited_this_period": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Credited This Period"
+          }
+        },
+        "type": "object",
+        "required": [
+          "installation_id",
+          "balance",
+          "reserved",
+          "available",
+          "consumed_this_period",
+          "credited_this_period"
+        ],
+        "title": "WalletView",
+        "description": "An installation's wallet: the third layer of the organization's credit (decision 4)."
+      }
+    }
+  }
+}

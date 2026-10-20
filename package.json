@@ -1,0 +1,40 @@
+{
+  "name": "korsi-plugin-sdk",
+  "private": true,
+  "description": "Korsi's plugin SDKs: @korsi/plugin (server), @korsi/bridge, @korsi/plugin-ui and @korsi/plugin-react (pages).",
+  "type": "module",
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/plugin packages/bridge packages/plugin-ui packages/plugin-react",
+    "clean": "tsc -b --clean packages/plugin packages/bridge packages/plugin-ui packages/plugin-react",
+    "test": "vitest run",
+    "typecheck": "tsc -b packages/plugin packages/bridge packages/plugin-ui packages/plugin-react && tsc -p tsconfig.test.json",
+    "fm:check": "prettier --check \"packages/*/{src,test}/**/*.{ts,tsx}\" vitest.config.ts",
+    "fm:fix": "prettier --write \"packages/*/{src,test}/**/*.{ts,tsx}\" vitest.config.ts",
+    "generate": "python3 scripts/generate_models.py",
+    "verify": "python3 scripts/generate_models.py --check && yarn fm:check && yarn typecheck && yarn test"
+  },
+  "devDependencies": {
+    "@emotion/react": "11.14.0",
+    "@emotion/styled": "11.14.1",
+    "@mui/material": "7.1.2",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "20.19.43",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "jsdom": "29.1.1",
+    "prettier": "3.9.10",
+    "react": "19.1.2",
+    "react-dom": "19.1.2",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "4.1.12"
+  }
+}
