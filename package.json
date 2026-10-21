@@ -21,18 +21,22 @@
     "verify": "python3 scripts/generate_models.py --check && yarn fm:check && yarn typecheck && yarn test"
   },
   "devDependencies": {
+    "@emotion/cache": "11.14.0",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@mui/material": "7.1.2",
+    "@mui/stylis-plugin-rtl": "7.1.0",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@types/node": "20.19.43",
     "@types/react": "19.1.17",
     "@types/react-dom": "19.1.11",
+    "@types/stylis": "4.2.7",
     "jsdom": "29.1.1",
     "prettier": "3.9.10",
     "react": "19.1.2",
     "react-dom": "19.1.2",
+    "stylis": "4.3.6",
     "typescript": "5.9.3",
     "vite": "7.3.7",
     "vitest": "4.1.12"

@@ -176,7 +176,7 @@
     source-map "^0.5.7"
     stylis "4.2.0"
 
-"@emotion/cache@^11.14.0":
+"@emotion/cache@11.14.0", "@emotion/cache@^11.14.0":
   version "11.14.0"
   resolved "https://registry.yarnpkg.com/@emotion/cache/-/cache-11.14.0.tgz#ee44b26986eeb93c8be82bb92f1f7a9b21b2ed76"
   integrity sha512-L/B1lc/TViYk4DcpGxtAVbx0ZyiKM5ktoIyafGkH6zg/tj+mA+NE//aPYKG0k8kCHSHVJrpLpcAlOBEXQ3SavA==
@@ -470,6 +470,14 @@
     "@emotion/sheet" "^1.4.0"
     csstype "^3.2.3"
     prop-types "^15.8.1"
+
+"@mui/stylis-plugin-rtl@7.1.0":
+  version "7.1.0"
+  resolved "https://registry.yarnpkg.com/@mui/stylis-plugin-rtl/-/stylis-plugin-rtl-7.1.0.tgz#4403846ef38cf8113db93266ab1c4a971f5e8163"
+  integrity sha512-13OlF0VKg2jR4zsWqefyn23tWANTUqArOtsTHMW/HH+599DFWxqHdwnvy40nYfq3njU8jtKDQygZoWw4Xso5Lw==
+  dependencies:
+    "@babel/runtime" "^7.27.1"
+    cssjanus "^2.0.1"
 
 "@mui/system@^7.1.1":
   version "7.3.11"
@@ -807,6 +815,11 @@
   dependencies:
     csstype "^3.0.2"
 
+"@types/stylis@4.2.7":
+  version "4.2.7"
+  resolved "https://registry.yarnpkg.com/@types/stylis/-/stylis-4.2.7.tgz#1813190525da9d2a2b6976583bdd4af5301d9fd4"
+  integrity sha512-VgDNokpBoKF+wrdvhAAfS55OMQpL6QRglwTwNC3kIgBrzZxA4WsFj+2eLfEA/uMUDzBcEhYmjSbwQakn/i3ajA==
+
 "@vitest/expect@4.1.12":
   version "4.1.12"
   resolved "https://registry.yarnpkg.com/@vitest/expect/-/expect-4.1.12.tgz#e12b5f114e548252a6eee50f6619f1b8f0f89eed"
@@ -948,6 +961,11 @@ css-tree@^3.2.1:
   dependencies:
     mdn-data "2.27.1"
     source-map-js "^1.2.1"
+
+cssjanus@^2.0.1:
+  version "2.3.1"
+  resolved "https://registry.yarnpkg.com/cssjanus/-/cssjanus-2.3.1.tgz#66ba936aa5e2c57e869a2e14f69097a0a69fe835"
+  integrity sha512-gWZQ/S0tthU2KCc55C5zbjxQN0XPK1sT0qufCqwCNUauGIsPDOfdBMBWosP+Kd4wf2A2Nxm/z6JAP6yNGnS7QQ==
 
 csstype@^3.0.2, csstype@^3.1.3, csstype@^3.2.3:
   version "3.2.3"
@@ -1547,6 +1565,11 @@ stylis@4.2.0:
   version "4.2.0"
   resolved "https://registry.yarnpkg.com/stylis/-/stylis-4.2.0.tgz#79daee0208964c8fe695a42fcffcac633a211a51"
   integrity sha512-Orov6g6BB1sDfYgzWfTHDOxamtX1bE/zo104Dh9e6fqJ3PooipYyfJ0pUmrZO2wAvO8YbEyeFrkV91XTsGMSrw==
+
+stylis@4.3.6:
+  version "4.3.6"
+  resolved "https://registry.yarnpkg.com/stylis/-/stylis-4.3.6.tgz#7c7b97191cb4f195f03ecab7d52f7902ed378320"
+  integrity sha512-yQ3rwFWRfwNUY7H5vpU0wfdkNSnvnJinhF9830Swlaxl03zsOjCfmX0ugac+3LtK0lYSgwL/KXc8oYL3mG4YFQ==
 
 supports-preserve-symlinks-flag@^1.0.0:
   version "1.0.0"

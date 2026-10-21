@@ -1,7 +1,7 @@
 {
   "name": "@korsi/plugin-react",
   "version": "0.1.0",
-  "description": "React for a Korsi plugin page: KorsiProvider, useKorsi, useHandle, and an MUI theme that matches Korsi.",
+  "description": "React for a Korsi plugin page: KorsiProvider and its hooks, and in MUI the page frame, theme and pieces Korsi's own pages are made of.",
   "keywords": ["korsi", "plugin", "react", "mui", "rtl"],
   "type": "module",
   "sideEffects": false,
@@ -26,11 +26,27 @@
     "@korsi/plugin-ui": "0.1.0"
   },
   "peerDependencies": {
+    "@emotion/cache": ">=11",
+    "@emotion/react": ">=11",
     "@mui/material": ">=6",
-    "react": ">=18"
+    "@mui/stylis-plugin-rtl": ">=6",
+    "react": ">=18",
+    "stylis": "4.x"
   },
   "peerDependenciesMeta": {
+    "@emotion/cache": {
+      "optional": true
+    },
+    "@emotion/react": {
+      "optional": true
+    },
     "@mui/material": {
+      "optional": true
+    },
+    "@mui/stylis-plugin-rtl": {
+      "optional": true
+    },
+    "stylis": {
       "optional": true
     }
   }

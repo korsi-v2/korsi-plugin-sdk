@@ -9,7 +9,7 @@ signature check, its lifecycle rules or its Bridge again — and gets one of the
 | [`@korsi/plugin`](packages/plugin) (Node, TypeScript) | the plugin's server | the same surface as `korsi-plugin` |
 | [`@korsi/bridge`](packages/bridge) | the plugin's pages | the Bridge protocol (`korsi-bridge/1`) as types; finding the Korsi that frames the page and loading its runtime; calling the plugin's own server as the person |
 | [`@korsi/plugin-ui`](packages/plugin-ui) | the plugin's pages, any framework | Korsi's theme as CSS variables; Korsi's typefaces; dates and digits as the organization writes them (Jalali, Persian digits) through `Intl`; `mountKorsiPage` |
-| [`@korsi/plugin-react`](packages/plugin-react) | React pages | `KorsiProvider`, `useKorsi`, `useHandle`, `usePluginApi`; `createKorsiTheme` for MUI (`@korsi/plugin-react/mui`) |
+| [`@korsi/plugin-react`](packages/plugin-react) | React pages | `KorsiProvider`, `useKorsi`, `useHandle`, `usePluginApi`, `useKorsiFormat`, `usePluginData`, `useMessages`; in MUI (`@korsi/plugin-react/mui`) the page frame `KorsiPage`, `createKorsiTheme`, and `Label`, `StatCard`, `EmptyState`, `NameAvatar` |
 
 The developer guide — Persian first, and English — is in Korsi's documentation
 (`docs/plugins/README-fa.md`) and on the developer portal (`developers.korsi.ai`, *Guide*). The
