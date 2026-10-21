@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   BRIDGE_FUNCTIONS,
+  OPTIONAL_BRIDGE_FUNCTIONS,
   BridgeTrustError,
   BridgeVersionError,
   bridgeUrl,
@@ -99,6 +100,13 @@ describe('loading the Bridge', () => {
     ).rejects.toBeInstanceOf(BridgeVersionError);
   });
 
+  it('loads an older Korsi that lacks what a newer one added', async () => {
+    const older: Record<string, unknown> = fake();
+    for (const name of OPTIONAL_BRIDGE_FUNCTIONS) delete older[name];
+    const bridge = await loadBridge('https://older.test', { importModule: async () => older });
+    expect(bridge.openProposal).toBeUndefined();
+  });
+
   it('is not tried outside a frame', async () => {
     const importModule = vi.fn();
     expect(await connectKorsi({ allowedOrigins: [KORSI], importModule })).toBeNull();
@@ -158,7 +166,7 @@ describe.skipIf(!hasRuntime)("Korsi's own runtime", () => {
     expect(runtime.PROTOCOL ?? PROTOCOL).toBe(PROTOCOL);
     for (const name of BRIDGE_FUNCTIONS) expect(typeof runtime[name]).toBe('function');
     const exported = Object.keys(runtime).filter((key) => typeof runtime[key] === 'function');
-    expect(exported.sort()).toEqual([...BRIDGE_FUNCTIONS].sort());
+    expect(exported.sort()).toEqual([...BRIDGE_FUNCTIONS, ...OPTIONAL_BRIDGE_FUNCTIONS].sort());
   });
 
   it('connects through connectKorsi: ready, init, a handle, and Korsi’s dialogs', async () => {
@@ -209,5 +217,24 @@ describe.skipIf(!hasRuntime)("Korsi's own runtime", () => {
       error: { code: 'busy', message: 'another question is open' },
     });
     await expect(picking).rejects.toMatchObject({ code: 'busy' });
+
+    // A proposal is decided in Korsi's own form; the page learns how it ended.
+    const opening = korsi!.bridge.openProposal!('6f0c1d3e-5b8a-4c2e-9d1f-0a2b3c4d5e6f', {
+      reject: true,
+    });
+    await vi.waitFor(() => expect(posted.at(-1)?.message.type).toBe(MESSAGES.openProposal));
+    const opened = posted.at(-1)!.message;
+    expect(opened.payload).toEqual({
+      proposal_id: '6f0c1d3e-5b8a-4c2e-9d1f-0a2b3c4d5e6f',
+      intent: 'reject',
+    });
+    deliver({
+      protocol: PROTOCOL,
+      type: MESSAGES.reply,
+      id: opened.id,
+      ok: true,
+      result: { status: 'rejected', action_id: null, error_code: null },
+    });
+    expect(await opening).toEqual({ status: 'rejected', action_id: null, error_code: null });
   });
 });

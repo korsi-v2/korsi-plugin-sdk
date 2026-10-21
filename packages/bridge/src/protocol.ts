@@ -24,6 +24,7 @@ export const MESSAGES = Object.freeze({
   pickPerson: 'korsi:pick.person',
   pickCase: 'korsi:pick.case',
   askKorsyar: 'korsi:ask.korsyar',
+  openProposal: 'korsi:open.proposal',
 } as const);
 
 export type MessageName = keyof typeof MESSAGES;
@@ -119,6 +120,15 @@ export interface PickedCase {
   title: string;
 }
 
+/** How a proposal the page opened for the person ended: `applied`, `rejected` or `failed`. */
+export interface DecidedProposal {
+  status: 'applied' | 'rejected' | 'failed' | 'expired' | 'superseded' | 'pending';
+  /** The work saving it created, for an applied `action.create`. */
+  action_id: string | null;
+  /** Why applying it failed. */
+  error_code: string | null;
+}
+
 export interface ConnectOptions {
   /** The Korsi origins this page trusts. Pass them in production. */
   allowedOrigins?: string[];
@@ -155,6 +165,18 @@ export interface KorsiBridge {
   pickCase(options?: { title?: string }): Promise<PickedCase | null>;
   /** Offer a question to Korsyar; sent only when the person presses send. True once sent. */
   askKorsyar(prompt: string): Promise<boolean>;
+  /**
+   * Show the person one of this plugin's own proposals, to decide in Korsi's own form: a new
+   * action opens Korsi's new-action form filled in with it, and saving accepts it with their edits;
+   * `{ reject: true }` asks them to turn it down. How it ended, or null when closed undecided.
+   *
+   * Absent from a Korsi older than this package (one of {@link OPTIONAL_BRIDGE_FUNCTIONS}): check
+   * before offering it, and send the person to Korsi's inbox there instead.
+   */
+  openProposal?(
+    proposalId: string,
+    options?: { reject?: boolean }
+  ): Promise<DecidedProposal | null>;
 }
 
 /** The runtime's functions, for checking a loaded module is the Bridge. */
@@ -171,4 +193,12 @@ export const BRIDGE_FUNCTIONS = Object.freeze([
   'pickPerson',
   'pickCase',
   'askKorsyar',
+] as const satisfies ReadonlyArray<keyof KorsiBridge>);
+
+/**
+ * Functions a newer Korsi adds. The loader does not require them, so a page keeps working when an
+ * older Korsi frames it; the page checks for each before offering what needs it.
+ */
+export const OPTIONAL_BRIDGE_FUNCTIONS = Object.freeze([
+  'openProposal',
 ] as const satisfies ReadonlyArray<keyof KorsiBridge>);

@@ -12,10 +12,12 @@
 export {
   BRIDGE_FUNCTIONS,
   MESSAGES,
+  OPTIONAL_BRIDGE_FUNCTIONS,
   PROTOCOL,
   type BridgeErrorCode,
   type ConfirmQuestion,
   type ConnectOptions,
+  type DecidedProposal,
   type KorsiBridge,
   type KorsiContext,
   type KorsiHandle,
