@@ -46,6 +46,11 @@ class Topic:
     WALLET_LOW: Final = "plugin.wallet.low"
     PLAN_CHANGED: Final = "plugin.plan.changed"
     SOURCE_REVIEWED: Final = "plugin.source.reviewed"
+    #: A message arrived in the mail of a person who turned this plugin on for it (ADR-0067).
+    #: Delivered with ``Event.handle``: read it as them with ``GET /mail/{subject_id}``.
+    MAIL_RECEIVED: Final = "source.message.received"
+    #: Their mailbox no longer has a message. Korsi keeps it; it may be filed or cited.
+    MAIL_DELETED: Final = "source.message.deleted"
 
 
 class MalformedRequest(RequestRejected):
@@ -170,6 +175,12 @@ class Event:
     subject_id: uuid.UUID | None
     data: dict[str, Any]
     occurred_at: datetime
+    #: A person's event, for the connection they turned on (ADR-0067): whose it is, and a handle to
+    #: read with as them -- minted for this delivery, good for five minutes, and only while the
+    #: connection is on. ``None`` for the installation's own events.
+    connection_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
+    handle: str | None = field(default=None, repr=False)
 
     @classmethod
     def parse(cls, payload: Mapping[str, Any]) -> Event:
@@ -188,6 +199,9 @@ class Event:
             subject_id=uuid.UUID(str(subject)) if subject else None,
             data=dict(payload.get("data") or {}),
             occurred_at=occurred,
+            connection_id=_uuid(payload, "connection_id") if payload.get("connection_id") else None,
+            user_id=_uuid(payload, "user_id") if payload.get("user_id") else None,
+            handle=str(payload["handle"]) if payload.get("handle") else None,
         )
 
 

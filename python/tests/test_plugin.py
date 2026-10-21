@@ -28,6 +28,7 @@ from korsi_plugin import (
     SignatureInvalid,
     SignatureStale,
     SQLiteEventLog,
+    Topic,
     UnknownInstallation,
     Unprovisioned,
     sign,
@@ -399,6 +400,27 @@ async def test_a_tool_call_is_verified_and_reads_korsi_as_the_person(plugin: Kor
     assert call.user_id == ANA
     me = await plugin.client(installation, call.handle).whoami()
     assert me.user_id == ANA
+
+
+async def test_a_person_s_event_carries_their_connection_and_a_handle(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    raw = body(
+        event(
+            topic="source.message.received",
+            subject_id=str(uuid.UUID(int=11)),
+            data={"source_id": str(uuid.UUID(int=11)), "received_at": None},
+            connection_id=str(uuid.UUID(int=9)),
+            user_id=str(ANA),
+            handle=HANDLE,
+            api_base=API_BASE,
+        )
+    )
+    _installation, parsed = await plugin.verified_event(raw, sign(SECRET, raw))
+    assert parsed.topic == Topic.MAIL_RECEIVED
+    assert parsed.connection_id == uuid.UUID(int=9)
+    assert parsed.user_id == ANA
+    assert parsed.handle == HANDLE
+    assert HANDLE not in repr(parsed)
 
 
 # -- connections ----------------------------------------------------------------------------------

@@ -8,7 +8,7 @@
  * generator's `HAND_WRITTEN` are `KorsiClient`'s own, wrapped in something better than the raw
  * call; `ROUTES` names the method of every route, either way.
  */
-import type { ActionDetail, ActionItem, ActionPage, ActionStatus, CalendarPage, CaseActivity, CaseActivityPage, CaseDetail, CaseItem, CaseLifecycle, CasePage, DecisionDetail, DecisionItem, DecisionPage, DecisionState, DocumentDetail, DocumentItem, DocumentPage, DocumentText, MeetingDetail, MeetingItem, MeetingPage, MeetingTranscript, MemoryAnswer, MemorySearchRequest, Organization, OrganizationPerson, OrganizationPersonPage } from './models.js';
+import type { ActionDetail, ActionItem, ActionPage, ActionStatus, CalendarPage, CaseActivity, CaseActivityPage, CaseDetail, CaseItem, CaseLifecycle, CasePage, DecisionDetail, DecisionItem, DecisionPage, DecisionState, DocumentDetail, DocumentItem, DocumentPage, DocumentText, MailDetail, MailItem, MailPage, MeetingDetail, MeetingItem, MeetingPage, MeetingTranscript, MemoryAnswer, MemorySearchRequest, Organization, OrganizationPerson, OrganizationPersonPage } from './models.js';
 
 /** Every route of the plane, and the client method that calls it. */
 export const ROUTES = Object.freeze({
@@ -25,6 +25,8 @@ export const ROUTES = Object.freeze({
   'GET /documents/{document_id}/text': 'getDocumentText',
   'GET /events': 'events',
   'GET /installation': 'whoami',
+  'GET /mail': 'listMail',
+  'GET /mail/{source_id}': 'readMail',
   'GET /meetings': 'listMeetings',
   'GET /meetings/{meeting_id}': 'getMeeting',
   'GET /meetings/{meeting_id}/transcript': 'getMeetingTranscript',
@@ -162,6 +164,26 @@ export abstract class PlaneOperations {
   /** GET /documents/{document_id}/text: The text Korsi read out of a document. */
   getDocumentText(documentId: string): Promise<DocumentText> {
     return this.call<DocumentText>('GET', `/documents/${segment(documentId)}/text`);
+  }
+
+  /** GET /mail: The person's own mail, newest first. */
+  listMail(options: { cursor?: string | null; limit?: number | null; threadId?: string | null; } = {}): Promise<MailPage> {
+    return this.call<MailPage>('GET', '/mail', { params: { cursor: options.cursor, limit: options.limit, thread_id: options.threadId } });
+  }
+
+  /** Every item of `listMail`, page by page. */
+  async *iterMail(options: { limit?: number | null; threadId?: string | null; } = {}): AsyncGenerator<MailItem> {
+    let cursor: string | null = null;
+    do {
+      const page: MailPage = await this.listMail({ ...options, cursor });
+      yield* page.items;
+      cursor = page.next_cursor ?? null;
+    } while (cursor);
+  }
+
+  /** GET /mail/{source_id}: One of the person's messages, with its words. */
+  readMail(sourceId: string): Promise<MailDetail> {
+    return this.call<MailDetail>('GET', `/mail/${segment(sourceId)}`);
   }
 
   /** GET /meetings: Meetings, newest first. */

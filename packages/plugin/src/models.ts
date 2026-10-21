@@ -474,6 +474,22 @@ export interface MailAttachment {
   content_type?: string | null;
 }
 
+/** ``GET /plugin/v1/mail/{source_id}``: one message, its headers and its words. */
+export interface MailDetail {
+  source_id: string;
+  subject: string;
+  folder: string | null;
+  thread_id: string | null;
+  sender: string | null;
+  sender_name: string | null;
+  received_at: string | null;
+  is_read: boolean | null;
+  has_attachments: boolean;
+  deleted_in_mailbox: boolean;
+  headers: Record<string, unknown>;
+  text: string;
+}
+
 /** What a message is beyond its text: who, when, where it sits and how it threads (ADR-0067). */
 export interface MailHeaders {
   message_id?: string | null;
@@ -489,6 +505,25 @@ export interface MailHeaders {
   is_flagged?: boolean | null;
   importance?: "low" | "normal" | "high" | null;
   attachments?: Array<MailAttachment>;
+}
+
+/** One message a person's connection brought in, as a list shows it. */
+export interface MailItem {
+  source_id: string;
+  subject: string;
+  folder: string | null;
+  thread_id: string | null;
+  sender: string | null;
+  sender_name: string | null;
+  received_at: string | null;
+  is_read: boolean | null;
+  has_attachments: boolean;
+  deleted_in_mailbox: boolean;
+}
+
+export interface MailPage {
+  items: Array<MailItem>;
+  next_cursor: string | null;
 }
 
 export interface MeetingAttendee {

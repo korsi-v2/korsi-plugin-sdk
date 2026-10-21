@@ -16,7 +16,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Final, cast
 from urllib.parse import quote
 
-from .models import ActionDetail, ActionItem, ActionPage, ActionStatus, CalendarPage, CaseActivity, CaseActivityPage, CaseDetail, CaseItem, CaseLifecycle, CasePage, DecisionDetail, DecisionItem, DecisionPage, DecisionState, DocumentDetail, DocumentItem, DocumentPage, DocumentText, MeetingDetail, MeetingItem, MeetingPage, MeetingTranscript, MemoryAnswer, MemorySearchRequest, Organization, OrganizationPerson, OrganizationPersonPage
+from .models import ActionDetail, ActionItem, ActionPage, ActionStatus, CalendarPage, CaseActivity, CaseActivityPage, CaseDetail, CaseItem, CaseLifecycle, CasePage, DecisionDetail, DecisionItem, DecisionPage, DecisionState, DocumentDetail, DocumentItem, DocumentPage, DocumentText, MailDetail, MailItem, MailPage, MeetingDetail, MeetingItem, MeetingPage, MeetingTranscript, MemoryAnswer, MemorySearchRequest, Organization, OrganizationPerson, OrganizationPersonPage
 
 #: Every route of the plane, and the client method that calls it.
 ROUTES: Final[Mapping[tuple[str, str], str]] = {
@@ -33,6 +33,8 @@ ROUTES: Final[Mapping[tuple[str, str], str]] = {
     ("GET", "/documents/{document_id}/text"): "get_document_text",
     ("GET", "/events"): "events",
     ("GET", "/installation"): "whoami",
+    ("GET", "/mail"): "list_mail",
+    ("GET", "/mail/{source_id}"): "read_mail",
     ("GET", "/meetings"): "list_meetings",
     ("GET", "/meetings/{meeting_id}"): "get_meeting",
     ("GET", "/meetings/{meeting_id}/transcript"): "get_meeting_transcript",
@@ -172,6 +174,25 @@ class PlaneOperations:
     async def get_document_text(self, document_id: str | uuid.UUID) -> DocumentText:
         """GET /documents/{document_id}/text: The text Korsi read out of a document."""
         return cast(DocumentText, await self._call("GET", f"/documents/{_segment(document_id)}/text"))
+
+    async def list_mail(self, *, cursor: str | None = None, limit: int | None = None, thread_id: str | None = None) -> MailPage:
+        """GET /mail: The person's own mail, newest first."""
+        return cast(MailPage, await self._call("GET", "/mail", params={"cursor": cursor, "limit": limit, "thread_id": thread_id}))
+
+    async def iter_mail(self, *, limit: int | None = None, thread_id: str | None = None) -> AsyncIterator[MailItem]:
+        """Every item of :meth:`list_mail`, page by page."""
+        cursor: str | None = None
+        while True:
+            page = await self.list_mail(limit=limit, thread_id=thread_id, cursor=cursor)
+            for item in page["items"]:
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    async def read_mail(self, source_id: str | uuid.UUID) -> MailDetail:
+        """GET /mail/{source_id}: One of the person's messages, with its words."""
+        return cast(MailDetail, await self._call("GET", f"/mail/{_segment(source_id)}"))
 
     async def list_meetings(self, *, q: str | None = None, case_id: str | uuid.UUID | None = None, occurred_from: str | datetime | None = None, occurred_to: str | datetime | None = None, cursor: str | None = None, limit: int | None = None) -> MeetingPage:
         """GET /meetings: Meetings, newest first."""

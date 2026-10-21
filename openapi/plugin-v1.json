@@ -2343,6 +2343,163 @@
         }
       }
     },
+    "/plugin/v1/mail": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: mail"
+        ],
+        "summary": "The person's own mail, newest first",
+        "description": "The messages the person's connections brought into Korsi -- theirs only, on their behalf only (`sources.read.message`). `thread_id` narrows it to one conversation.",
+        "operationId": "list_mail_plugin_v1_mail_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/mail/{source_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: mail"
+        ],
+        "summary": "One of the person's messages, with its words",
+        "operationId": "read_mail_plugin_v1_mail__source_id__get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/plugin/v1/calendar": {
       "get": {
         "tags": [
@@ -5479,6 +5636,113 @@
         "title": "MailAttachment",
         "description": "An attachment's name and size. Its content does not come in with the message."
       },
+      "MailDetail": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "sender_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Name"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
+          "is_read": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Read"
+          },
+          "has_attachments": {
+            "type": "boolean",
+            "title": "Has Attachments",
+            "default": false
+          },
+          "deleted_in_mailbox": {
+            "type": "boolean",
+            "title": "Deleted In Mailbox",
+            "default": false
+          },
+          "headers": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Headers"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "subject",
+          "text"
+        ],
+        "title": "MailDetail",
+        "description": "``GET /plugin/v1/mail/{source_id}``: one message, its headers and its words."
+      },
       "MailHeaders": {
         "properties": {
           "message_id": {
@@ -5633,6 +5897,128 @@
         "type": "object",
         "title": "MailHeaders",
         "description": "What a message is beyond its text: who, when, where it sits and how it threads (ADR-0067).\n\nKept beside the source so a person's mail can be read as mail -- by thread, by sender -- and so\na mailbox that moves or deletes a message can be followed: ``provider_item_id`` and ``folder``\nare the mailbox's own address for it, which changes when it moves."
+      },
+      "MailItem": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "sender_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Name"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
+          "is_read": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Read"
+          },
+          "has_attachments": {
+            "type": "boolean",
+            "title": "Has Attachments",
+            "default": false
+          },
+          "deleted_in_mailbox": {
+            "type": "boolean",
+            "title": "Deleted In Mailbox",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "subject"
+        ],
+        "title": "MailItem",
+        "description": "One message a person's connection brought in, as a list shows it."
+      },
+      "MailPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MailItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "MailPage"
       },
       "MeetingAttendee": {
         "properties": {

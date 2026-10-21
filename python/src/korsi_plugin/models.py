@@ -502,6 +502,23 @@ class MailAttachment(TypedDict):
     content_type: NotRequired[str | None]
 
 
+class MailDetail(TypedDict):
+    """``GET /plugin/v1/mail/{source_id}``: one message, its headers and its words."""
+
+    source_id: str
+    subject: str
+    folder: str | None
+    thread_id: str | None
+    sender: str | None
+    sender_name: str | None
+    received_at: str | None
+    is_read: bool | None
+    has_attachments: bool
+    deleted_in_mailbox: bool
+    headers: dict[str, Any]
+    text: str
+
+
 class MailHeaders(TypedDict):
     """What a message is beyond its text: who, when, where it sits and how it threads (ADR-0067)."""
 
@@ -518,6 +535,26 @@ class MailHeaders(TypedDict):
     is_flagged: NotRequired[bool | None]
     importance: NotRequired[Literal["low", "normal", "high"] | None]
     attachments: NotRequired[list[MailAttachment]]
+
+
+class MailItem(TypedDict):
+    """One message a person's connection brought in, as a list shows it."""
+
+    source_id: str
+    subject: str
+    folder: str | None
+    thread_id: str | None
+    sender: str | None
+    sender_name: str | None
+    received_at: str | None
+    is_read: bool | None
+    has_attachments: bool
+    deleted_in_mailbox: bool
+
+
+class MailPage(TypedDict):
+    items: list[MailItem]
+    next_cursor: str | None
 
 
 class MeetingAttendee(TypedDict):
@@ -912,7 +949,10 @@ __all__ = [
     "LocalizedText",
     "MailAddress",
     "MailAttachment",
+    "MailDetail",
     "MailHeaders",
+    "MailItem",
+    "MailPage",
     "MeetingAttendee",
     "MeetingDetail",
     "MeetingItem",
