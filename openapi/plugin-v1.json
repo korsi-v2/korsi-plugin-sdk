@@ -3,7 +3,7 @@
   "info": {
     "title": "Korsi plugin API",
     "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's four budgets -- reads,\nwrites, sources, proposals (:mod:`.limits`) -- before it opens a session, and past one it is\nanswered ``429`` with ``Retry-After``.\n",
-    "version": "1.0"
+    "version": "1.1"
   },
   "paths": {
     "/plugin/v1/installation": {
@@ -5341,6 +5341,16 @@
             "type": "boolean",
             "title": "Personal",
             "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailHeaders"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -5398,6 +5408,231 @@
         "type": "object",
         "title": "LocalizedText",
         "description": "A name or a sentence in the languages Korsi ships. At least one is required.\n\nPersian first, because it is the default language of the product; any one is accepted so a\npublisher writing in one language is not refused, and the store falls back through\n:meth:`pick`."
+      },
+      "MailAddress": {
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Address"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "title": "MailAddress",
+        "description": "One party to a message, as the mailbox shows it."
+      },
+      "MailAttachment": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MailAttachment",
+        "description": "An attachment's name and size. Its content does not come in with the message."
+      },
+      "MailHeaders": {
+        "properties": {
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 998
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "provider_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Item Id"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "items": {
+              "$ref": "#/components/schemas/MailAddress"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "To",
+            "default": []
+          },
+          "cc": {
+            "items": {
+              "$ref": "#/components/schemas/MailAddress"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Cc",
+            "default": []
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
+          "is_read": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Read"
+          },
+          "is_flagged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Flagged"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "normal",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/MailAttachment"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Attachments",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MailHeaders",
+        "description": "What a message is beyond its text: who, when, where it sits and how it threads (ADR-0067).\n\nKept beside the source so a person's mail can be read as mail -- by thread, by sender -- and so\na mailbox that moves or deletes a message can be followed: ``provider_item_id`` and ``folder``\nare the mailbox's own address for it, which changes when it moves."
       },
       "MeetingAttendee": {
         "properties": {
@@ -6584,6 +6819,18 @@
               }
             ],
             "title": "User Id"
+          },
+          "connection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
           },
           "scopes": {
             "items": {

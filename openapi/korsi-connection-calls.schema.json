@@ -1,0 +1,931 @@
+{
+  "$defs": {
+    "CalendarAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "result": {
+          "default": null,
+          "title": "Result"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CalendarAnswer",
+      "type": "object"
+    },
+    "CalendarCall": {
+      "additionalProperties": false,
+      "description": "One operation of Korsi's calendar engine, carried out on the person's calendar.\n\n``op`` and ``args`` follow the engine's calendar port, one to one; the plugin answers with what\nthat method returns. Korsi's engine does everything else -- which events go where, what the\nperson changed on each side, what to send back.",
+      "properties": {
+        "call": {
+          "const": "connection.calendar",
+          "default": "connection.calendar",
+          "title": "Call",
+          "type": "string"
+        },
+        "call_id": {
+          "format": "uuid",
+          "title": "Call Id",
+          "type": "string"
+        },
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "connection_id": {
+          "format": "uuid",
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "connection_key": {
+          "maxLength": 48,
+          "title": "Connection Key",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        },
+        "locale": {
+          "maxLength": 16,
+          "title": "Locale",
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        },
+        "deadline_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "op": {
+          "pattern": "^[a-z][a-z_]{1,63}$",
+          "title": "Op",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "call_id",
+        "installation_id",
+        "connection_id",
+        "connection_key",
+        "user_id",
+        "locale",
+        "timezone",
+        "deadline_seconds",
+        "issued_at",
+        "op"
+      ],
+      "title": "CalendarCall",
+      "type": "object"
+    },
+    "CallError": {
+      "additionalProperties": false,
+      "description": "A refusal, in words that may be shown to the person -- never a secret.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/CallErrorCode"
+        },
+        "message": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Message",
+          "type": "string"
+        },
+        "retry_after_seconds": {
+          "anyOf": [
+            {
+              "maximum": 86400,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry After Seconds"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "CallError",
+      "type": "object"
+    },
+    "CallErrorCode": {
+      "description": "Why a plugin could not do what Korsi asked. Korsi decides what follows from this alone.",
+      "enum": [
+        "auth_failed",
+        "unreachable",
+        "throttled",
+        "invalid_state",
+        "not_found",
+        "conflict",
+        "bad_request",
+        "unprovisioned",
+        "internal"
+      ],
+      "title": "CallErrorCode",
+      "type": "string"
+    },
+    "ConnectionCapability": {
+      "description": "What a connection brings into Korsi, which Korsi then does itself (ADR-0067).\n\nThe plugin speaks the other system's language and nothing else: Korsi asks it for changes and\napplies them, as the person who connected, in its own jobs.",
+      "enum": [
+        "mail",
+        "calendar"
+      ],
+      "title": "ConnectionCapability",
+      "type": "string"
+    },
+    "MailAddress": {
+      "additionalProperties": false,
+      "description": "One party to a message, as the mailbox shows it.",
+      "properties": {
+        "address": {
+          "maxLength": 320,
+          "minLength": 3,
+          "title": "Address",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "title": "MailAddress",
+      "type": "object"
+    },
+    "MailAttachment": {
+      "additionalProperties": false,
+      "description": "An attachment's name and size. Its content does not come in with the message.",
+      "properties": {
+        "name": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "content_type": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "MailAttachment",
+      "type": "object"
+    },
+    "MailChange": {
+      "additionalProperties": false,
+      "description": "A message to keep (``upsert``) or one the mailbox no longer has (``delete``).\n\nA mailbox often says only *which item* went, by its own id, so a delete names the item, the\nmessage, or both; Korsi finds the source by either.",
+      "properties": {
+        "op": {
+          "enum": [
+            "upsert",
+            "delete"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MailMessage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "provider_item_id": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Item Id"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "title": "MailChange",
+      "type": "object"
+    },
+    "MailHeaders": {
+      "additionalProperties": false,
+      "description": "What a message is beyond its text: who, when, where it sits and how it threads (ADR-0067).\n\nKept beside the source so a person's mail can be read as mail -- by thread, by sender -- and so\na mailbox that moves or deletes a message can be followed: ``provider_item_id`` and ``folder``\nare the mailbox's own address for it, which changes when it moves.",
+      "properties": {
+        "message_id": {
+          "anyOf": [
+            {
+              "maxLength": 998,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Id"
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thread Id"
+        },
+        "folder": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Folder"
+        },
+        "provider_item_id": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Item Id"
+        },
+        "sender": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MailAddress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "to": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MailAddress"
+          },
+          "maxItems": 500,
+          "title": "To",
+          "type": "array"
+        },
+        "cc": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MailAddress"
+          },
+          "maxItems": 500,
+          "title": "Cc",
+          "type": "array"
+        },
+        "sent_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sent At"
+        },
+        "received_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Received At"
+        },
+        "is_read": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Read"
+        },
+        "is_flagged": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Flagged"
+        },
+        "importance": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "normal",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Importance"
+        },
+        "attachments": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MailAttachment"
+          },
+          "maxItems": 100,
+          "title": "Attachments",
+          "type": "array"
+        }
+      },
+      "title": "MailHeaders",
+      "type": "object"
+    },
+    "MailMessage": {
+      "additionalProperties": false,
+      "description": "One message, as it becomes the person's private source.",
+      "properties": {
+        "external_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "External Id",
+          "type": "string"
+        },
+        "subject": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Subject",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 2000000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/$defs/MailHeaders"
+        }
+      },
+      "required": [
+        "external_id",
+        "subject",
+        "text",
+        "headers"
+      ],
+      "title": "MailMessage",
+      "type": "object"
+    },
+    "SkippedItem": {
+      "additionalProperties": false,
+      "description": "An item the plugin could not read. The rest of the sync goes on without it.",
+      "properties": {
+        "external_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Id"
+        },
+        "provider_item_id": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Item Id"
+        },
+        "reason": {
+          "maxLength": 300,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "SkippedItem",
+      "type": "object"
+    },
+    "SyncAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MailChange"
+          },
+          "maxItems": 1000,
+          "title": "Changes",
+          "type": "array"
+        },
+        "state": {
+          "additionalProperties": true,
+          "title": "State",
+          "type": "object"
+        },
+        "more": {
+          "default": false,
+          "title": "More",
+          "type": "boolean"
+        },
+        "skipped": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SkippedItem"
+          },
+          "maxItems": 1000,
+          "title": "Skipped",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "SyncAnswer",
+      "type": "object"
+    },
+    "SyncCall": {
+      "additionalProperties": false,
+      "description": "Tell me what changed since ``state``.",
+      "properties": {
+        "call": {
+          "const": "connection.sync",
+          "default": "connection.sync",
+          "title": "Call",
+          "type": "string"
+        },
+        "call_id": {
+          "format": "uuid",
+          "title": "Call Id",
+          "type": "string"
+        },
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "connection_id": {
+          "format": "uuid",
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "connection_key": {
+          "maxLength": 48,
+          "title": "Connection Key",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        },
+        "locale": {
+          "maxLength": 16,
+          "title": "Locale",
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        },
+        "deadline_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "capability": {
+          "$ref": "#/$defs/ConnectionCapability",
+          "default": "mail"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "limits": {
+          "$ref": "#/$defs/SyncLimits"
+        }
+      },
+      "required": [
+        "call_id",
+        "installation_id",
+        "connection_id",
+        "connection_key",
+        "user_id",
+        "locale",
+        "timezone",
+        "deadline_seconds",
+        "issued_at"
+      ],
+      "title": "SyncCall",
+      "type": "object"
+    },
+    "SyncLimits": {
+      "additionalProperties": false,
+      "description": "How much one sync answer may carry. The plugin stops at whichever comes first.",
+      "properties": {
+        "max_items": {
+          "default": 200,
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "max_bytes": {
+          "default": 4194304,
+          "maximum": 4194304,
+          "minimum": 1024,
+          "title": "Max Bytes",
+          "type": "integer"
+        },
+        "backfill_days": {
+          "default": 90,
+          "maximum": 3650,
+          "minimum": 0,
+          "title": "Backfill Days",
+          "type": "integer"
+        }
+      },
+      "title": "SyncLimits",
+      "type": "object"
+    },
+    "VerifiedAccount": {
+      "additionalProperties": false,
+      "description": "The account the credentials open, as the other system names it.",
+      "properties": {
+        "subject": {
+          "maxLength": 320,
+          "minLength": 1,
+          "title": "Subject",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 320,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "address": {
+          "anyOf": [
+            {
+              "maxLength": 320,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host"
+        }
+      },
+      "required": [
+        "subject",
+        "label"
+      ],
+      "title": "VerifiedAccount",
+      "type": "object"
+    },
+    "VerifyAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerifiedAccount"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "VerifyAnswer",
+      "type": "object"
+    },
+    "VerifyCall": {
+      "additionalProperties": false,
+      "description": "Check these credentials, and say whose account they open.",
+      "properties": {
+        "call": {
+          "const": "connection.verify",
+          "default": "connection.verify",
+          "title": "Call",
+          "type": "string"
+        },
+        "call_id": {
+          "format": "uuid",
+          "title": "Call Id",
+          "type": "string"
+        },
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "connection_id": {
+          "format": "uuid",
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "connection_key": {
+          "maxLength": 48,
+          "title": "Connection Key",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        },
+        "locale": {
+          "maxLength": 16,
+          "title": "Locale",
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        },
+        "deadline_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "installation_id",
+        "connection_id",
+        "connection_key",
+        "user_id",
+        "locale",
+        "timezone",
+        "deadline_seconds",
+        "issued_at"
+      ],
+      "title": "VerifyCall",
+      "type": "object"
+    }
+  },
+  "description": "What Korsi and a plugin say to each other about a person's connection (ADR-0067).",
+  "title": "KorsiConnectionCalls",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://korsi.ai/schemas/korsi.plugin/connection-calls/v1.json"
+}
