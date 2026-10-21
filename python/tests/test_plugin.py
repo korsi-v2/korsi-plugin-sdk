@@ -13,6 +13,9 @@ import httpx
 import pytest
 
 from korsi_plugin import (
+    SYNC,
+    VERIFY,
+    CallReplayed,
     CredentialMismatch,
     Event,
     EventInProgress,
@@ -26,6 +29,7 @@ from korsi_plugin import (
     SignatureStale,
     SQLiteEventLog,
     UnknownInstallation,
+    Unprovisioned,
     sign,
 )
 from tests.fake_korsi import (
@@ -395,6 +399,71 @@ async def test_a_tool_call_is_verified_and_reads_korsi_as_the_person(plugin: Kor
     assert call.user_id == ANA
     me = await plugin.client(installation, call.handle).whoami()
     assert me.user_id == ANA
+
+
+# -- connections ----------------------------------------------------------------------------------
+
+
+def connection_call(**overrides: Any) -> dict[str, Any]:
+    return {
+        "call": SYNC,
+        "call_id": str(uuid.uuid4()),
+        "installation_id": str(INSTALLATION),
+        "connection_id": str(uuid.UUID(int=9)),
+        "connection_key": "mailbox",
+        "user_id": str(ANA),
+        "locale": "fa",
+        "timezone": "Asia/Tehran",
+        "values": {"email": "ana@acme.test"},
+        "secrets": {"password": "kept-for-this-call"},
+        "settings": {},
+        "deadline_seconds": 90,
+        "issued_at": "2026-10-21T10:00:00+00:00",
+        "state": {"cursor": 4},
+        "limits": {"max_items": 200},
+        **overrides,
+    }
+
+
+async def test_a_connection_call_is_verified_and_parsed(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    raw = body(connection_call())
+    installation, call = await plugin.connection_call(raw, sign(SECRET, raw))
+    assert installation.id == INSTALLATION
+    assert call.call == SYNC
+    assert call.state == {"cursor": 4}
+    assert call.secrets == {"password": "kept-for-this-call"}
+    # The person's secrets never show in a log line that prints the call.
+    assert "kept-for-this-call" not in repr(call)
+
+
+async def test_a_connection_call_is_answered_once(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    raw = body(connection_call(call=VERIFY))
+    await plugin.connection_call(raw, sign(SECRET, raw))
+    with pytest.raises(CallReplayed):
+        await plugin.connection_call(raw, sign(SECRET, raw))
+
+
+async def test_a_plugin_that_lost_its_credentials_says_so(plugin: KorsiPlugin) -> None:
+    raw = body(connection_call())
+    with pytest.raises(Unprovisioned) as refused:
+        await plugin.connection_call(raw, sign(SECRET, raw))
+    assert refused.value.status == 409
+
+
+async def test_a_connection_call_not_signed_by_korsi_is_refused(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    raw = body(connection_call())
+    with pytest.raises(SignatureInvalid):
+        await plugin.connection_call(raw, sign("another-secret", raw))
+
+
+async def test_a_connection_call_is_one_of_three(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    raw = body(connection_call(call="connection.delete_everything"))
+    with pytest.raises(MalformedRequest):
+        await plugin.connection_call(raw, sign(SECRET, raw))
 
 
 # -- a page's caller ------------------------------------------------------------------------------

@@ -1,12 +1,15 @@
 """What Korsi sends a plugin's server, read into typed values.
 
-Korsi calls three addresses under the plugin's ``base_url``, each signed
+Korsi calls four addresses under the plugin's ``base_url``, each signed
 (:mod:`korsi_plugin.signature`):
 
 * ``POST /korsi/lifecycle`` -- :class:`Installed` (with the credential) or :class:`Removed`;
 * ``POST /korsi/events`` -- an :class:`Event`, at least once;
 * ``POST /korsi/tools/{name}`` -- a :class:`ToolCall`: Korsyar asks on a person's behalf, with
-  that person's sealed handle.
+  that person's sealed handle;
+* ``POST /korsi/connections`` -- a :class:`ConnectionCall` about a person's connected account:
+  check these credentials, tell me what changed, act on their calendar (ADR-0067). The person's
+  secrets are in it, for this call only.
 
 These parse a body that has already been verified; :class:`korsi_plugin.KorsiPlugin` does both.
 """
@@ -26,6 +29,12 @@ from korsi_plugin.errors import RequestRejected
 LIFECYCLE_PATH: Final = "/korsi/lifecycle"
 EVENTS_PATH: Final = "/korsi/events"
 TOOLS_PATH: Final = "/korsi/tools/"
+CONNECTIONS_PATH: Final = "/korsi/connections"
+
+#: The kinds of connection call, as ``ConnectionCall.call`` names them.
+VERIFY: Final = "connection.verify"
+SYNC: Final = "connection.sync"
+CALENDAR: Final = "connection.calendar"
 
 
 class Topic:
@@ -211,4 +220,80 @@ class ToolCall:
             arguments=arguments,
             handle=_text(payload, "handle"),
             locale=payload.get("locale"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectionCall:
+    """Korsi asking about one person's connection (ADR-0067).
+
+    ``call`` is :data:`VERIFY` (are these credentials an account? answer ``{"ok": true, "account":
+    {"subject", "label", "address", "host"}}`` or ``{"ok": false, "error": {"code":
+    "auth_failed", "message"}}``), :data:`SYNC` (what changed since ``state``? answer
+    ``{"changes", "state", "more", "skipped"}``) or :data:`CALENDAR` (``op`` with ``args``; answer
+    ``{"result"}``). The shapes are published as ``korsi-connection-calls.schema.json``.
+
+    ``secrets`` are the person's, opened by Korsi for this call only: never log them, never keep
+    them. Answer within ``deadline_seconds`` -- stop early and say ``more`` rather than run over.
+    """
+
+    call: str
+    call_id: uuid.UUID
+    installation_id: uuid.UUID
+    connection_id: uuid.UUID
+    connection_key: str
+    user_id: uuid.UUID
+    locale: str
+    timezone: str
+    values: dict[str, str]
+    secrets: dict[str, str] = field(repr=False)
+    settings: dict[str, Any]
+    deadline_seconds: int
+    issued_at: datetime
+    #: A sync's: what this plugin answered as ``state`` last time, or ``None`` on a first sync.
+    state: dict[str, Any] | None = None
+    #: A sync's: ``max_items``, ``max_bytes``, ``backfill_days``.
+    limits: dict[str, Any] = field(default_factory=dict)
+    #: A calendar call's operation and its arguments.
+    op: str | None = None
+    args: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def parse(cls, payload: Mapping[str, Any]) -> ConnectionCall:
+        call = _text(payload, "call")
+        if call not in (VERIFY, SYNC, CALENDAR):
+            msg = f"not a connection call: {call!r}"
+            raise MalformedRequest(msg)
+        for key in ("values", "secrets", "settings"):
+            if not isinstance(payload.get(key, {}), dict):
+                msg = f"{key} is not an object"
+                raise MalformedRequest(msg)
+        state = payload.get("state")
+        if state is not None and not isinstance(state, dict):
+            msg = "state is not an object"
+            raise MalformedRequest(msg)
+        try:
+            issued_at = datetime.fromisoformat(_text(payload, "issued_at"))
+            deadline = int(payload.get("deadline_seconds", 0))
+        except ValueError as error:
+            msg = "issued_at or deadline_seconds is not readable"
+            raise MalformedRequest(msg) from error
+        return cls(
+            call=call,
+            call_id=_uuid(payload, "call_id"),
+            installation_id=_uuid(payload, "installation_id"),
+            connection_id=_uuid(payload, "connection_id"),
+            connection_key=_text(payload, "connection_key"),
+            user_id=_uuid(payload, "user_id"),
+            locale=str(payload.get("locale") or "fa"),
+            timezone=str(payload.get("timezone") or "UTC"),
+            values={str(k): str(v) for k, v in (payload.get("values") or {}).items()},
+            secrets={str(k): str(v) for k, v in (payload.get("secrets") or {}).items()},
+            settings=dict(payload.get("settings") or {}),
+            deadline_seconds=deadline,
+            issued_at=issued_at,
+            state=state,
+            limits=dict(payload.get("limits") or {}),
+            op=payload.get("op"),
+            args=dict(payload.get("args") or {}),
         )

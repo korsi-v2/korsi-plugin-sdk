@@ -10,6 +10,9 @@ wrong:
 * **events** (:meth:`KorsiPlugin.event`): verified with the installation's secret, deduplicated,
   and given back to the log when the handler fails, so Korsi's retry runs it again;
 * **tool calls** (:meth:`KorsiPlugin.tool_call`): verified, parsed, with the person's handle;
+* **connection calls** (:meth:`KorsiPlugin.connection_call`): verified, parsed, each answered once,
+  and -- for a plugin that lost what Korsi gave it, a container with no disk after a restart --
+  refused with 409, which tells Korsi to give it its credentials again;
 * **a page's caller** (:meth:`KorsiPlugin.person`): the handle a page sends is checked with Korsi
   before anything is done with it, so a page can never claim to be somebody it is not;
 * **the client** (:meth:`KorsiPlugin.client`): the plugin plane as the installation or as a
@@ -35,6 +38,7 @@ import httpx
 from korsi_plugin.client import DEFAULT_TIMEOUT_SECONDS, Caller, KorsiClient
 from korsi_plugin.dedupe import DEFAULT_LEASE_SECONDS, EventLog, MemoryEventLog
 from korsi_plugin.deliveries import (
+    ConnectionCall,
     Event,
     Installation,
     Installed,
@@ -56,6 +60,20 @@ class UnknownInstallation(RequestRejected):
     """A call for an installation this plugin does not have."""
 
     status = 404
+
+
+class Unprovisioned(RequestRejected):
+    """A connection call for an installation this plugin has no credentials for -- usually a plugin
+    with no disk, restarted. 409, with ``code``: Korsi provisions it again and calls back later."""
+
+    status = 409
+    code = "plugin.unprovisioned"
+
+
+class CallReplayed(RequestRejected):
+    """A connection call seen before: a signed body sent again within the signature's tolerance."""
+
+    status = 400
 
 
 class EventInProgress(RequestRejected):
@@ -162,6 +180,8 @@ class KorsiPlugin:
         self._tolerance = tolerance
         self._handle_ttl = handle_cache_seconds
         self._handles: OrderedDict[str, tuple[float, Caller]] = OrderedDict()
+        #: Connection calls already answered, for the signature's tolerance and a little more.
+        self._calls: OrderedDict[uuid.UUID, float] = OrderedDict()
         self._http = httpx.AsyncClient(timeout=timeout, transport=transport)
 
     async def aclose(self) -> None:
@@ -327,7 +347,35 @@ class KorsiPlugin:
         verify_signature(installation.signing_secret, body, signature, tolerance=self._tolerance)
         return installation, call
 
-    # -- 4. a page's caller ------------------------------------------------------------------------
+    # -- 4. connections ---------------------------------------------------------------------------
+
+    async def connection_call(
+        self, body: bytes, signature: str | None
+    ) -> tuple[Installation, ConnectionCall]:
+        """``POST /korsi/connections``: verified, parsed, and refused if it was seen before.
+
+        Dispatch on ``call.call`` (``deliveries.VERIFY``, ``SYNC``, ``CALENDAR``) and answer 200
+        with the call's answer -- a refusal by the other system included, as ``{"error": ...}``.
+        An installation this plugin does not have is :class:`Unprovisioned` (409): a plugin Korsi
+        runs has no disk, and after a restart this is how Korsi learns to give it its credentials
+        again.
+        """
+        call = ConnectionCall.parse(read_json(body))
+        installation = await self.installations.installation(call.installation_id)
+        if installation is None:
+            msg = f"installation {call.installation_id} has no credentials here"
+            raise Unprovisioned(msg)
+        verify_signature(installation.signing_secret, body, signature, tolerance=self._tolerance)
+        now = time.monotonic()
+        while self._calls and next(iter(self._calls.values())) < now - 2 * self._tolerance:
+            self._calls.popitem(last=False)
+        if call.call_id in self._calls:
+            msg = f"call {call.call_id} was answered already"
+            raise CallReplayed(msg)
+        self._calls[call.call_id] = now
+        return installation, call
+
+    # -- 5. a page's caller ------------------------------------------------------------------------
 
     async def person(self, *, authorization: str | None, installation_id: str | None) -> Person:
         """The person a page's request is for, as Korsi vouches for them.

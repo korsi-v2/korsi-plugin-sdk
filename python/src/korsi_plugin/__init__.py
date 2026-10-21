@@ -18,9 +18,14 @@ from korsi_plugin.dedupe import (
     SQLiteEventLog,
 )
 from korsi_plugin.deliveries import (
+    CALENDAR,
+    CONNECTIONS_PATH,
     EVENTS_PATH,
     LIFECYCLE_PATH,
+    SYNC,
     TOOLS_PATH,
+    VERIFY,
+    ConnectionCall,
     Event,
     Installation,
     Installed,
@@ -41,6 +46,7 @@ from korsi_plugin.errors import (
 from korsi_plugin.operations import ROUTES, PlaneOperations
 from korsi_plugin.plugin import (
     INSTALLATION_HEADER,
+    CallReplayed,
     CredentialMismatch,
     EventInProgress,
     EventStatus,
@@ -51,6 +57,7 @@ from korsi_plugin.plugin import (
     LifecycleStatus,
     Person,
     UnknownInstallation,
+    Unprovisioned,
 )
 from korsi_plugin.signature import (
     DEFAULT_TOLERANCE_SECONDS,
@@ -67,6 +74,8 @@ from korsi_plugin.wallet import Reservation, Wallet, is_no_active_plan, is_walle
 __version__ = "0.1.0"
 
 __all__ = [
+    "CALENDAR",
+    "CONNECTIONS_PATH",
     "DEFAULT_LEASE_SECONDS",
     "DEFAULT_TOLERANCE_SECONDS",
     "EVENTS_PATH",
@@ -76,11 +85,15 @@ __all__ = [
     "PLUGIN_API",
     "ROUTES",
     "SIGNATURE_HEADER",
+    "SYNC",
     "TOOLS_PATH",
+    "VERIFY",
     "VERSION_HEADER",
+    "CallReplayed",
     "Caller",
     "ClaimStatus",
     "Code",
+    "ConnectionCall",
     "CredentialMismatch",
     "Event",
     "EventInProgress",
@@ -111,6 +124,7 @@ __all__ = [
     "ToolCall",
     "Topic",
     "UnknownInstallation",
+    "Unprovisioned",
     "Wallet",
     "__version__",
     "api_base_problem",
