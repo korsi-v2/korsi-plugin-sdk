@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Refresh openapi/plugin-v1.json -- the plugin plane's contract -- and the types generated from it.
 #
-#   scripts/sync-openapi.sh                        # from the korsi-api checkout beside this one
+#   scripts/sync-openapi.sh                        # from korsi-core/korsi-api beside korsi-plugins
 #   scripts/sync-openapi.sh https://acme.korsi.ai  # from a running Korsi (/plugin/v1/openapi.json)
 #
 # Then run both SDKs' tests: a route Korsi added or removed fails the contract tests until the
@@ -16,7 +16,7 @@ trap 'rm -f "$tmp"' EXIT
 if [[ $# -ge 1 ]]; then
   curl -fsS "${1%/}/plugin/v1/openapi.json" -o "$tmp"
 else
-  api="${KORSI_API_DIR:-$root/../korsi-api}"
+  api="${KORSI_API_DIR:-$root/../../korsi-core/korsi-api}"
   (cd "$api" && uv run --frozen python - >"$tmp") <<'PY'
 import json, sys
 from fastapi.openapi.utils import get_openapi

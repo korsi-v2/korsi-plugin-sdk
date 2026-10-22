@@ -10,8 +10,8 @@ export const KORSI = 'https://acme.korsi.test';
 
 export const RUNTIME =
   process.env.KORSI_BRIDGE_RUNTIME ??
-  // Tests run from this repository's root, beside korsi-app.
-  resolve(process.cwd(), '../korsi-app/public/sdk/korsi-bridge.js');
+  // Tests run from this repository's root, in korsi-plugins beside korsi-core.
+  resolve(process.cwd(), '../../korsi-core/korsi-app/public/sdk/korsi-bridge.js');
 
 export const hasRuntime = existsSync(RUNTIME);
 
