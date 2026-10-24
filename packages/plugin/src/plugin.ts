@@ -11,6 +11,9 @@
  * - **events** (`event`): verified with the installation's secret, deduplicated, and given back to
  *   the log when the handler fails, so Korsi's retry runs it again;
  * - **tool calls** (`toolCall`): verified, parsed, with the person's handle;
+ * - **connection calls** (`connectionCall`): verified, parsed, each answered once, and -- for a
+ *   plugin that lost what Korsi gave it, a container with no disk after a restart -- refused with
+ *   409, which tells Korsi to give it its credentials again;
  * - **a page's caller** (`person`): the handle a page sends is checked with Korsi before anything
  *   is done with it, so a page can never claim to be somebody it is not;
  * - **the client** (`client`): the plugin plane as the installation or as a person.
@@ -26,10 +29,12 @@ import { DEFAULT_LEASE_SECONDS, MemoryEventLog, type EventLog } from './dedupe.j
 import {
   installationOf,
   MalformedRequest,
+  parseConnectionCall,
   parseEvent,
   parseLifecycle,
   parseToolCall,
   readJson,
+  type ConnectionCall,
   type Installation,
   type KorsiEvent,
   type Removed,
@@ -49,6 +54,24 @@ export const INSTALLATION_HEADER = 'X-Korsi-Installation';
 export class UnknownInstallation extends RequestRejected {
   constructor(message: string, status = 404) {
     super(message, status);
+  }
+}
+
+/**
+ * A connection call for an installation this plugin has no credentials for -- usually a plugin with
+ * no disk, restarted. 409, with `code`: Korsi provisions it again and calls back later.
+ */
+export class Unprovisioned extends RequestRejected {
+  readonly code = 'plugin.unprovisioned';
+  constructor(message: string) {
+    super(message, 409);
+  }
+}
+
+/** A connection call seen before: a signed body sent again within the signature's tolerance. */
+export class CallReplayed extends RequestRejected {
+  constructor(message: string) {
+    super(message, 400);
   }
 }
 
@@ -150,6 +173,8 @@ export class KorsiPlugin {
   readonly #timeout: number;
   readonly #fetch: typeof fetch | undefined;
   readonly #handles = new Map<string, { until: number; caller: Caller }>();
+  /** Connection calls already answered, for the signature's tolerance and a little more. */
+  readonly #calls = new Map<string, number>();
 
   constructor(installations: InstallationStore, options: KorsiPluginOptions = {}) {
     this.installations = installations;
@@ -333,7 +358,40 @@ export class KorsiPlugin {
     return { installation, call };
   }
 
-  // -- 4. a page's caller -------------------------------------------------------------------------
+  // -- 4. connections -----------------------------------------------------------------------------
+
+  /**
+   * `POST /korsi/connections`: verified, parsed, and refused if it was seen before.
+   *
+   * Dispatch on `call.call` (`VERIFY`, `SYNC`, `CALENDAR`) and answer 200 with the call's answer --
+   * a refusal by the other system included, as `{ error: ... }`. An installation this plugin does
+   * not have is `Unprovisioned` (409): a plugin Korsi runs has no disk, and after a restart this is
+   * how Korsi learns to give it its credentials again.
+   */
+  async connectionCall(
+    body: RawBody,
+    signature: string | null | undefined
+  ): Promise<{ installation: Installation; call: ConnectionCall }> {
+    const call = parseConnectionCall(readJson(body));
+    const installation = await this.installations.installation(call.installationId);
+    if (!installation) {
+      throw new Unprovisioned(`installation ${call.installationId} has no credentials here`);
+    }
+    verifySignature(installation.signingSecret, body, signature, { tolerance: this.#tolerance });
+    const now = Date.now();
+    // Oldest first, as inserted: drop what the signature's tolerance no longer admits.
+    for (const [id, at] of this.#calls) {
+      if (at >= now - 2 * this.#tolerance * 1000) break;
+      this.#calls.delete(id);
+    }
+    if (this.#calls.has(call.callId)) {
+      throw new CallReplayed(`call ${call.callId} was answered already`);
+    }
+    this.#calls.set(call.callId, now);
+    return { installation, call };
+  }
+
+  // -- 5. a page's caller -------------------------------------------------------------------------
 
   /**
    * The person a page's request is for, as Korsi vouches for them. `authorization` is the

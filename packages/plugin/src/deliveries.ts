@@ -1,11 +1,14 @@
 /**
  * What Korsi sends a plugin's server, read into typed values.
  *
- * Korsi calls three addresses under the plugin's `base_url`, each signed (`./signature.ts`):
+ * Korsi calls four addresses under the plugin's `base_url`, each signed (`./signature.ts`):
  *
  * - `POST /korsi/lifecycle` -- `installed` (with the credential) or `removed`;
  * - `POST /korsi/events` -- an event, at least once;
- * - `POST /korsi/tools/{name}` -- Korsyar asks on a person's behalf, with their sealed handle.
+ * - `POST /korsi/tools/{name}` -- Korsyar asks on a person's behalf, with their sealed handle;
+ * - `POST /korsi/connections` -- a `ConnectionCall` about a person's connected account: check these
+ *   credentials, tell me what changed, act on their calendar (ADR-0067). The person's secrets are
+ *   in it, for this call only.
  *
  * These parse a body that has already been verified; `KorsiPlugin` does both.
  */
@@ -16,6 +19,12 @@ import type { RawBody } from './signature.js';
 export const LIFECYCLE_PATH = '/korsi/lifecycle';
 export const EVENTS_PATH = '/korsi/events';
 export const TOOLS_PATH = '/korsi/tools/';
+export const CONNECTIONS_PATH = '/korsi/connections';
+
+/** The kinds of connection call, as `ConnectionCall.call` names them. */
+export const VERIFY = 'connection.verify';
+export const SYNC = 'connection.sync';
+export const CALENDAR = 'connection.calendar';
 
 /** Topics of the plugin's own life, always delivered. Others are those its manifest asks for. */
 export const Topic = Object.freeze({
@@ -25,6 +34,13 @@ export const Topic = Object.freeze({
   walletLow: 'plugin.wallet.low',
   planChanged: 'plugin.plan.changed',
   sourceReviewed: 'plugin.source.reviewed',
+  /**
+   * A message arrived in the mail of a person who turned this plugin on for it (ADR-0067).
+   * Delivered with `KorsiEvent.handle`: read it as them with `GET /mail/{subjectId}`.
+   */
+  mailReceived: 'source.message.received',
+  /** Their mailbox no longer has a message. Korsi keeps it; it may be filed or cited. */
+  mailDeleted: 'source.message.deleted',
 } as const);
 
 /** A body that is not what Korsi sends. Answer 400. */
@@ -159,6 +175,14 @@ export interface KorsiEvent {
   subjectId: string | null;
   data: Record<string, unknown>;
   occurredAt: Date;
+  /**
+   * A person's event, for the connection they turned on (ADR-0067): whose it is, and a handle to
+   * read with as them -- minted for this delivery, good for five minutes, and only while the
+   * connection is on. `null` for the installation's own events.
+   */
+  connectionId: string | null;
+  userId: string | null;
+  handle: string | null;
 }
 
 export function parseEvent(payload: Json): KorsiEvent {
@@ -173,6 +197,9 @@ export function parseEvent(payload: Json): KorsiEvent {
     subjectId: typeof subject === 'string' && subject ? subject : null,
     data: object(payload, 'data'),
     occurredAt,
+    connectionId: payload.connection_id ? uuid(payload, 'connection_id') : null,
+    userId: payload.user_id ? uuid(payload, 'user_id') : null,
+    handle: payload.handle ? String(payload.handle) : null,
   };
 }
 
@@ -199,4 +226,81 @@ export function parseToolCall(name: string, payload: Json): ToolCall {
     handle: text(payload, 'handle'),
     locale: (payload.locale as string | undefined) ?? null,
   };
+}
+
+/**
+ * Korsi asking about one person's connection (ADR-0067).
+ *
+ * `call` is `VERIFY` (are these credentials an account? answer `{ ok: true, account: { subject,
+ * label, address, host } }` or `{ ok: false, error: { code: 'auth_failed', message } }`), `SYNC`
+ * (what changed since `state`? answer `{ changes, state, more, skipped }`) or `CALENDAR` (`op` with
+ * `args`; answer `{ result }`). The shapes are published as `korsi-connection-calls.schema.json`.
+ *
+ * `secrets` are the person's, opened by Korsi for this call only: never log them, never keep them
+ * (they are left out of `JSON.stringify` and `console.log`). Answer within `deadlineSeconds` --
+ * stop early and say `more` rather than run over.
+ */
+export interface ConnectionCall {
+  call: typeof VERIFY | typeof SYNC | typeof CALENDAR;
+  callId: string;
+  installationId: string;
+  connectionId: string;
+  connectionKey: string;
+  userId: string;
+  locale: string;
+  timezone: string;
+  values: Record<string, string>;
+  readonly secrets: Record<string, string>;
+  settings: Record<string, unknown>;
+  deadlineSeconds: number;
+  issuedAt: Date;
+  /** A sync's: what this plugin answered as `state` last time, or `null` on a first sync. */
+  state: Record<string, unknown> | null;
+  /** A sync's: `max_items`, `max_bytes`, `backfill_days`. */
+  limits: Record<string, unknown>;
+  /** A calendar call's operation and its arguments. */
+  op: string | null;
+  args: Record<string, unknown>;
+}
+
+const strings = (value: Json): Record<string, string> =>
+  Object.fromEntries(Object.entries(value).map(([key, item]) => [key, String(item)]));
+
+export function parseConnectionCall(payload: Json): ConnectionCall {
+  const call = payload.call;
+  if (call !== VERIFY && call !== SYNC && call !== CALENDAR) {
+    throw new MalformedRequest(`not a connection call: ${JSON.stringify(call)}`);
+  }
+  const state = payload.state ?? null;
+  if (state !== null && (typeof state !== 'object' || Array.isArray(state))) {
+    throw new MalformedRequest('state is not an object');
+  }
+  const issuedAt = new Date(text(payload, 'issued_at'));
+  const deadlineSeconds = Number(payload.deadline_seconds ?? 0);
+  if (Number.isNaN(issuedAt.getTime()) || !Number.isInteger(deadlineSeconds)) {
+    throw new MalformedRequest('issued_at or deadline_seconds is not readable');
+  }
+  const parsed = {
+    call,
+    callId: uuid(payload, 'call_id'),
+    installationId: uuid(payload, 'installation_id'),
+    connectionId: uuid(payload, 'connection_id'),
+    connectionKey: text(payload, 'connection_key'),
+    userId: uuid(payload, 'user_id'),
+    locale: String(payload.locale || 'fa'),
+    timezone: String(payload.timezone || 'UTC'),
+    values: strings(object(payload, 'values')),
+    settings: object(payload, 'settings'),
+    deadlineSeconds,
+    issuedAt,
+    state: state as Record<string, unknown> | null,
+    limits: object(payload, 'limits'),
+    op: typeof payload.op === 'string' ? payload.op : null,
+    args: object(payload, 'args'),
+  };
+  // Not enumerable: a log line that prints the call never prints the person's secrets.
+  return Object.defineProperty(parsed, 'secrets', {
+    value: strings(object(payload, 'secrets')),
+    enumerable: false,
+  }) as ConnectionCall;
 }

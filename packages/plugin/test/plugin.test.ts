@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  CallReplayed,
   CredentialMismatch,
   EventInProgress,
   HandleRejected,
@@ -11,7 +12,11 @@ import {
   SignatureInvalid,
   SignatureStale,
   sign,
+  SYNC,
+  Topic,
   UnknownInstallation,
+  Unprovisioned,
+  VERIFY,
   type Installation,
   type InstallationStore,
   type KorsiEvent,
@@ -366,5 +371,99 @@ describe('tools and pages', () => {
         installationId: '33333333-3333-4333-8333-333333333333',
       })
     ).rejects.toBeInstanceOf(UnknownInstallation);
+  });
+});
+
+describe("a person's events", () => {
+  it('carry their connection and a handle to read as them', async () => {
+    await install();
+    const raw = body(
+      event({
+        topic: 'source.message.received',
+        subject_id: '00000000-0000-4000-8000-000000000011',
+        data: { source_id: '00000000-0000-4000-8000-000000000011', received_at: null },
+        connection_id: '00000000-0000-4000-8000-000000000009',
+        user_id: ANA,
+        handle: HANDLE,
+      })
+    );
+    const { event: parsed } = await plugin.verifiedEvent(raw, sign(SECRET, raw));
+    expect(parsed.topic).toBe(Topic.mailReceived);
+    expect(parsed).toMatchObject({
+      connectionId: '00000000-0000-4000-8000-000000000009',
+      userId: ANA,
+      handle: HANDLE,
+    });
+  });
+
+  it("are the installation's own without them", async () => {
+    await install();
+    const raw = body(event());
+    const { event: parsed } = await plugin.verifiedEvent(raw, sign(SECRET, raw));
+    expect(parsed).toMatchObject({ connectionId: null, userId: null, handle: null });
+  });
+});
+
+describe('connection calls', () => {
+  const connectionCall = (overrides: object = {}) => ({
+    call: SYNC,
+    call_id: crypto.randomUUID(),
+    installation_id: INSTALLATION,
+    connection_id: '00000000-0000-4000-8000-000000000009',
+    connection_key: 'mailbox',
+    user_id: ANA,
+    locale: 'fa',
+    timezone: 'Asia/Tehran',
+    values: { email: 'ana@acme.test' },
+    secrets: { password: 'kept-for-this-call' },
+    settings: {},
+    deadline_seconds: 90,
+    issued_at: '2026-10-21T10:00:00+00:00',
+    state: { cursor: 4 },
+    limits: { max_items: 200 },
+    ...overrides,
+  });
+
+  it('are verified and parsed', async () => {
+    await install();
+    const raw = body(connectionCall());
+    const { installation, call } = await plugin.connectionCall(raw, sign(SECRET, raw));
+    expect(installation.id).toBe(INSTALLATION);
+    expect(call).toMatchObject({ call: SYNC, state: { cursor: 4 }, deadlineSeconds: 90 });
+    expect(call.secrets).toEqual({ password: 'kept-for-this-call' });
+    // The person's secrets never show in a log line that prints the call.
+    expect(JSON.stringify(call)).not.toContain('kept-for-this-call');
+  });
+
+  it('are answered once', async () => {
+    await install();
+    const raw = body(connectionCall({ call: VERIFY }));
+    await plugin.connectionCall(raw, sign(SECRET, raw));
+    await expect(plugin.connectionCall(raw, sign(SECRET, raw))).rejects.toBeInstanceOf(
+      CallReplayed
+    );
+  });
+
+  it('tell Korsi a plugin lost its credentials', async () => {
+    const raw = body(connectionCall());
+    const error = await plugin.connectionCall(raw, sign(SECRET, raw)).catch((caught) => caught);
+    expect(error).toBeInstanceOf(Unprovisioned);
+    expect(error).toMatchObject({ status: 409, code: 'plugin.unprovisioned' });
+  });
+
+  it('are refused unless Korsi signed them', async () => {
+    await install();
+    const raw = body(connectionCall());
+    await expect(plugin.connectionCall(raw, sign('another-secret', raw))).rejects.toBeInstanceOf(
+      SignatureInvalid
+    );
+  });
+
+  it('are one of three', async () => {
+    await install();
+    const raw = body(connectionCall({ call: 'connection.delete_everything' }));
+    await expect(plugin.connectionCall(raw, sign(SECRET, raw))).rejects.toBeInstanceOf(
+      MalformedRequest
+    );
   });
 });

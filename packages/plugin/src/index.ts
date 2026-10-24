@@ -1,7 +1,8 @@
 /**
  * The server side of a Korsi plugin, for Node.
  *
- * - `KorsiPlugin` -- the lifecycle, events, tool calls and a page's caller, verified;
+ * - `KorsiPlugin` -- the lifecycle, events, tool calls, connection calls and a page's caller,
+ *   verified;
  * - `KorsiClient` -- the plugin plane (`/plugin/v1`), typed from Korsi's OpenAPI document;
  * - `verifySignature` -- `Korsi-Signature`, for a server that wants only that;
  * - `Wallet` and `KorsiClient.reserve` -- MU, exactly, and reserve-then-settle.
@@ -25,16 +26,22 @@ export {
 } from './dedupe.js';
 export { PlaneOperations, type CallOptions } from './operations.js';
 export {
+  CALENDAR,
+  CONNECTIONS_PATH,
   EVENTS_PATH,
   installationOf,
   LIFECYCLE_PATH,
   MalformedRequest,
+  parseConnectionCall,
   parseEvent,
   parseLifecycle,
   parseToolCall,
   readJson,
+  SYNC,
   TOOLS_PATH,
   Topic,
+  VERIFY,
+  type ConnectionCall,
   type Installation,
   type Installed,
   type KorsiEvent,
@@ -53,12 +60,14 @@ export {
 } from './errors.js';
 export type * from './models.js';
 export {
+  CallReplayed,
   CredentialMismatch,
   EventInProgress,
   HandleRejected,
   INSTALLATION_HEADER,
   KorsiPlugin,
   UnknownInstallation,
+  Unprovisioned,
   type EventStatus,
   type InstallationStore,
   type KorsiPluginOptions,
