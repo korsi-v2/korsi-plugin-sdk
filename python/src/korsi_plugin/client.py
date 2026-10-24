@@ -49,7 +49,7 @@ DEFAULT_TIMEOUT_SECONDS: Final = 15.0
 #: The plane's version, sent by Korsi on every response.
 VERSION_HEADER: Final = "Korsi-Plugin-API"
 #: The plugin API this SDK was generated for. A Korsi on another major version is not this contract.
-PLUGIN_API: Final = "1.0"
+PLUGIN_API: Final = "1.1"
 
 #: A quantity of a service: exact, never a float.
 Quantity = Decimal | int | str

@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from korsi_plugin import ROUTES, KorsiClient
+from korsi_plugin import PLUGIN_API, ROUTES, KorsiClient
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCUMENT = json.loads((ROOT / "openapi" / "plugin-v1.json").read_text(encoding="utf-8"))
@@ -23,6 +23,10 @@ def test_every_route_of_the_plane_has_a_method_and_nothing_else_does() -> None:
     assert set(ROUTES) == routes
     for name in ROUTES.values():
         assert callable(getattr(KorsiClient, name)), name
+
+
+def test_the_sdk_says_the_version_of_the_document_it_was_generated_from() -> None:
+    assert DOCUMENT["info"]["version"] == PLUGIN_API
 
 
 def test_the_generated_types_are_what_the_document_says() -> None:

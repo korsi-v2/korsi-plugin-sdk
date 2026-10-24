@@ -3353,7 +3353,8 @@
           "status_reported",
           "meeting_replanned",
           "stages_edited",
-          "stage_work_changed"
+          "stage_work_changed",
+          "meeting_wrapped_up"
         ],
         "title": "CaseActivityKind",
         "description": "What happened to a case, for its timeline."
@@ -5431,6 +5432,7 @@
           "awaiting_consent",
           "development",
           "suspended",
+          "awaiting_payment",
           "removed"
         ],
         "title": "InstallationState"

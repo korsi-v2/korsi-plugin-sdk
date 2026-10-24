@@ -11,6 +11,7 @@ import {
   KorsiClient,
   KorsiRefused,
   KorsiUnreachable,
+  PLUGIN_API,
   ROUTES,
   Wallet,
 } from '@korsi/plugin';
@@ -182,5 +183,12 @@ describe("Korsi's contract", () => {
     for (const name of Object.values(ROUTES)) {
       expect(typeof (KorsiClient.prototype as any)[name]).toBe('function');
     }
+  });
+
+  it('says the version of the document it was generated from', () => {
+    const document = JSON.parse(
+      readFileSync(new URL('../../../openapi/plugin-v1.json', import.meta.url), 'utf8')
+    );
+    expect(PLUGIN_API).toBe(document.info.version);
   });
 });
