@@ -52,5 +52,7 @@ An `InstallationStore` is three async methods -- `installation(id)`, `save_insta
 `remove_installation(id)`; keep the token and the signing secret encrypted. `SQLiteEventLog` is a
 durable event log for a plugin without a database of its own.
 
-The sample plugin `korsi-plugin-email-commitments` uses all of it with FastAPI; the guide is at
-`developers.korsi.ai`.
+The sample plugin ([developers.korsi.ai/docs/example](https://developers.korsi.ai/docs/example))
+uses all of it with FastAPI; the guide is at
+[developers.korsi.ai/docs/guide](https://developers.korsi.ai/docs/guide). Installing it from GitHub
+is in the [repository's README](../README.md#getting-it).

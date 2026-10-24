@@ -5,16 +5,69 @@ signature check, its lifecycle rules or its Bridge again — and gets one of the
 
 | Package | For | What it gives |
 |---|---|---|
-| [`korsi-plugin`](python) (Python) | the plugin's server | `KorsiPlugin`: the lifecycle, events (deduplicated), tool calls and a page's caller, each verified; `KorsiClient`, the plugin plane (`/plugin/v1`) typed from Korsi's OpenAPI; the wallet, exactly |
-| [`@korsi/plugin`](packages/plugin) (Node, TypeScript) | the plugin's server | the same surface as `korsi-plugin` |
+| [`korsi-plugin`](python) (Python) | the plugin's server | `KorsiPlugin`: the lifecycle, events (deduplicated; a person's mail events with a handle to read as them), tool calls, connection calls (ADR-0067) and a page's caller, each verified; `KorsiClient`, the plugin plane (`/plugin/v1`) typed from Korsi's OpenAPI; the wallet, exactly; `SQLiteEventLog` |
+| [`@korsi/plugin`](packages/plugin) (Node, TypeScript) | the plugin's server | the same surface as `korsi-plugin`, but no durable event log of its own: bring an `EventLog` |
 | [`@korsi/bridge`](packages/bridge) | the plugin's pages | the Bridge protocol (`korsi-bridge/1`) as types; finding the Korsi that frames the page and loading its runtime; calling the plugin's own server as the person |
 | [`@korsi/plugin-ui`](packages/plugin-ui) | the plugin's pages, any framework | Korsi's theme as CSS variables; Korsi's typefaces; dates and digits as the organization writes them (Jalali, Persian digits) through `Intl`; `mountKorsiPage` |
 | [`@korsi/plugin-react`](packages/plugin-react) | React pages | `KorsiProvider`, `useKorsi`, `useHandle`, `usePluginApi`, `useKorsiFormat`, `usePluginData`, `useMessages`; in MUI (`@korsi/plugin-react/mui`) the page frame `KorsiPage`, `createKorsiTheme`, and `Label`, `StatCard`, `EmptyState`, `NameAvatar` |
 
-The developer guide — Persian first, and English — is in Korsi's documentation
-(`docs/plugins/README-fa.md`) and on the developer portal (`developers.korsi.ai`, *Guide*). The
-sample plugin, [`korsi-plugin-email-commitments`](../korsi-plugin-email-commitments), is built on
-`korsi-plugin`.
+The developer guide — Persian first, and English — is on the developer portal,
+[developers.korsi.ai](https://developers.korsi.ai/docs/guide) (and in Korsi's own documentation,
+`docs/plugins/README-fa.md`). The sample plugin, *email commitments*
+([developers.korsi.ai/docs/example](https://developers.korsi.ai/docs/example)), is built on
+`korsi-plugin` and `@korsi/plugin-react`.
+
+## Getting it
+
+Nothing here is on PyPI or npm yet; the SDK is this repository,
+[github.com/korsi-v2/korsi-plugin-sdk](https://github.com/korsi-v2/korsi-plugin-sdk). Pin a commit
+-- `main` moves with Korsi.
+
+**Python** installs straight from GitHub:
+
+```toml
+# pyproject.toml
+dependencies = ["korsi-plugin"]
+
+[tool.uv.sources]
+korsi-plugin = { git = "https://github.com/korsi-v2/korsi-plugin-sdk", subdirectory = "python", rev = "<commit>" }
+```
+
+```bash
+pip install "korsi-plugin @ git+https://github.com/korsi-v2/korsi-plugin-sdk@<commit>#subdirectory=python"
+```
+
+**Node and pages** need a checkout beside your plugin, built once:
+
+```bash
+git clone https://github.com/korsi-v2/korsi-plugin-sdk.git
+cd korsi-plugin-sdk && yarn install && yarn build && cd ..
+yarn add file:./korsi-plugin-sdk/packages/plugin   # the server SDK; it depends on no other package here
+```
+
+A page compiles `@korsi/bridge`, `@korsi/plugin-ui` and `@korsi/plugin-react` from that checkout's
+`src` -- they depend on one another, which `file:` cannot resolve -- with one alias per package in
+its bundler; the sample plugin's `web/vite.config.js` is the whole of it:
+
+```js
+const sdk = path.resolve(here, '../korsi-plugin-sdk/packages');
+resolve: {
+  alias: [
+    { find: '@korsi/plugin-react/mui', replacement: path.join(sdk, 'plugin-react/src/mui.ts') },
+    { find: '@korsi/plugin-react', replacement: path.join(sdk, 'plugin-react/src/index.ts') },
+    { find: '@korsi/plugin-ui', replacement: path.join(sdk, 'plugin-ui/src/index.ts') },
+    { find: '@korsi/bridge', replacement: path.join(sdk, 'bridge/src/index.ts') },
+  ],
+  dedupe: ['react', 'react-dom', '@mui/material', '@emotion/react', '@emotion/cache'],
+},
+```
+
+A container build of a server that depends on a checkout needs it as a second build context
+(`docker build --build-context korsi-plugin-sdk=../korsi-plugin-sdk/python .`); one that installs
+from GitHub needs nothing more.
+
+Without a Korsi checkout beside this one, the Bridge's test against Korsi's own runtime is skipped;
+point `KORSI_BRIDGE_RUNTIME` at a copy of any Korsi's `/sdk/korsi-bridge.js` to run it.
 
 ## Two rules the packages are built around
 
@@ -55,21 +108,9 @@ yarn build    # dist/ for every package
 
 Node 20.19 or later; Python 3.11 or later (3.13 in development, as in the rest of Korsi).
 
-## Using it before it is published
-
-Nothing here is on PyPI or npm yet. Until it is, depend on the checkout:
-
-```toml
-# pyproject.toml
-dependencies = ["korsi-plugin"]
-
-[tool.uv.sources]
-korsi-plugin = { path = "../korsi-plugin-sdk/python" }
-```
-
-```bash
-yarn add file:../korsi-plugin-sdk/packages/plugin   # after `yarn build` here
-```
-
-A container build needs the checkout as a second build context; the sample plugin's `Dockerfile`
-shows how.
+**This SDK is kept current with Korsi.** A Korsi change to anything a plugin talks to -- the plugin
+plane (`/plugin/v1`), the connection calls, the lifecycle, event or tool-call deliveries, the
+Bridge's runtime, or the theme and typefaces Korsi sends a page -- updates this repository in the
+same piece of work: `scripts/sync-openapi.sh`, the hand-written surface if it needs it, both SDKs'
+tests, and the developer portal's guide where it describes the SDK (Korsi's definition of done,
+item 12).
