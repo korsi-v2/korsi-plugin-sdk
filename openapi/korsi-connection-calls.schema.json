@@ -177,7 +177,8 @@
       "description": "What a connection brings into Korsi, which Korsi then does itself (ADR-0067).\n\nThe plugin speaks the other system's language and nothing else: Korsi asks it for changes and\napplies them, as the person who connected, in its own jobs.",
       "enum": [
         "mail",
-        "calendar"
+        "calendar",
+        "calendar_attendees"
       ],
       "title": "ConnectionCapability",
       "type": "string"
