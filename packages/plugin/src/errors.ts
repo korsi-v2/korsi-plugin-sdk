@@ -16,6 +16,11 @@
  */
 export class RequestRejected extends Error {
   status: number;
+  /**
+   * Korsi's code for the refusal, where Korsi acts on it -- `plugin.unprovisioned` -- else null.
+   * Answer it in the body (`{ code, detail }`): Korsi reads the code, never the status alone.
+   */
+  readonly code: string | null = null;
 
   constructor(message: string, status = 400) {
     super(message);
@@ -50,8 +55,9 @@ export class KorsiRefused extends KorsiError {
   readonly requestId: string | null;
   readonly errors: ProblemFieldError[];
   /**
-   * Seconds to wait before asking again, when Korsi said (`429 plugin.rate_limited`: the
-   * installation spent one of its budgets -- reads, writes, sources, proposals).
+   * Seconds to wait before asking again, when Korsi said (`Retry-After`): `429
+   * plugin.rate_limited`, the installation spent one of its budgets -- reads, writes, sources,
+   * proposals, models; `409 plugin.text_pending`, a scan still being read.
    */
   readonly retryAfter: number | null;
   /**
@@ -91,8 +97,11 @@ export const Code = Object.freeze({
   notFound: 'resource.not_found',
   invalid: 'request.invalid',
   rateLimited: 'request.rate_limited',
-  /** One of the installation's budgets (reads, writes, sources, proposals) is spent: 429. */
+  /** One of the installation's budgets (reads, writes, sources, proposals, models) is spent: 429. */
   pluginRateLimited: 'plugin.rate_limited',
+  /** Korsi itself is busy or a dependency is down: ask again, with the same idempotency key. */
+  serviceUnavailable: 'service.unavailable',
+  providerUnreachable: 'provider.unreachable',
 
   notAPlugin: 'plugin.not_a_plugin',
   installationNotFound: 'plugin.installation_not_found',
@@ -100,12 +109,22 @@ export const Code = Object.freeze({
   handleInvalid: 'plugin.handle_invalid',
   pluginNotVisible: 'plugin.not_visible',
   scopeMissing: 'plugin.scope_missing',
+  /** The plugin's own permission keys (ADR-0082): one Korsi was asked about is not declared. */
+  permissionUnknown: 'plugin.permission_unknown',
+  /**
+   * What a plugin answers -- never what Korsi answers it -- for an installation it has no
+   * credential for (ADR-0086): `409 { "code": "plugin.unprovisioned" }`. Korsi gives the credential
+   * again and asks once more; a 409 without this code is the plugin's own refusal.
+   */
+  unprovisioned: 'plugin.unprovisioned',
 
   recordTypeUnknown: 'plugin.record_type_unknown',
   recordInvalid: 'plugin.record_invalid',
   recordNotFound: 'plugin.record_not_found',
   recordVersionConflict: 'plugin.record_version_conflict',
   recordReadOnly: 'plugin.record_read_only',
+  /** A record query named a field its type does not declare, or compared it as it cannot be. */
+  recordFieldUnknown: 'plugin.record_field_unknown',
 
   proposalInvalid: 'plugin.proposal_invalid',
   proposalTypeNotDeclared: 'plugin.proposal_type_not_declared',
@@ -117,6 +136,19 @@ export const Code = Object.freeze({
   walletInsufficient: 'plugin.wallet_insufficient',
   holdNotFound: 'plugin.hold_not_found',
   holdSettled: 'plugin.hold_settled',
+
+  /** The publisher's paid services are paused (its wallet ran out, ADR-0081): 402. */
+  publisherFunds: 'plugin.publisher_funds',
+  /** A model Korsi does not lend plugins: `GET /models` lists the ones it does. */
+  modelNotAllowed: 'plugin.model_not_allowed',
+  /** A file nobody handed this installation in Korsi's picker: 404. */
+  fileNotGranted: 'plugin.file_not_granted',
+  /** A scan Korsi is still reading: ask again after `params.retry_after_seconds` (409). */
+  textPending: 'plugin.text_pending',
+  /** A file Korsi will not read the text of; `params.reason` says why (409). */
+  textUnavailable: 'plugin.text_unavailable',
+  /** A meeting this installation does not host: 404. */
+  meetingNotHosted: 'plugin.meeting_not_hosted',
 } as const);
 
 /** Whether `error` is Korsi asking the plugin to slow down; `retryAfter` says how long. */
@@ -127,6 +159,26 @@ export function isRateLimited(error: unknown): boolean {
       error.code === Code.pluginRateLimited ||
       error.code === Code.rateLimited)
   );
+}
+
+/** Whether `error` is a scan Korsi is still reading; `textPendingSeconds` says when to ask again. */
+export function isTextPending(error: unknown): error is KorsiRefused {
+  return error instanceof KorsiRefused && error.code === Code.textPending;
+}
+
+/** How long to wait before asking a pending scan's text again, in seconds. */
+export function textPendingSeconds(error: KorsiRefused, fallback = 30): number {
+  const seconds = Number(error.params.retry_after_seconds ?? error.retryAfter ?? fallback);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : fallback;
+}
+
+/**
+ * Whether `error` is the publisher's paid services paused (ADR-0081): models, OCR and the
+ * specialist stop until the publisher's wallet is topped up. Everything else keeps working, so a
+ * plugin says so and goes on without them.
+ */
+export function isPublisherFunds(error: unknown): error is KorsiRefused {
+  return error instanceof KorsiRefused && error.code === Code.publisherFunds;
 }
 
 /**

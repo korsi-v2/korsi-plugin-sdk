@@ -1,7 +1,7 @@
 /**
  * Korsi's signature: what makes a call Korsi's and not anybody's.
  *
- * Every lifecycle call, event and tool call Korsi sends a plugin carries
+ * Every call Korsi makes to a plugin -- lifecycle, event, tool, action, connection -- carries
  *
  *     Korsi-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">
  *

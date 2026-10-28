@@ -235,7 +235,7 @@ describe('events', () => {
     expect(attempts).toBe(2);
   });
 
-  it('are refused unsigned; one for an installation not known yet is retried', async () => {
+  it('are refused unsigned; one for an installation not known yet is unprovisioned', async () => {
     await install();
     const raw = body(event());
     const forged = await plugin.event(raw, sign('not-it', raw), () => undefined).catch((e) => e);
@@ -245,13 +245,14 @@ describe('events', () => {
     const stale = await plugin.verifiedEvent(raw, sign(SECRET, raw, { now: 1 })).catch((e) => e);
     expect(stale).toBeInstanceOf(SignatureStale);
     expect(stale.status).toBe(503);
-    // The plugin may have been down when Korsi delivered `installed`: a 4xx would lose the event.
+    // The plugin may have been down when Korsi delivered `installed`, or restarted with nothing
+    // kept: Korsi gives the credential again on this code, and delivers the event once more.
     const stranger = body(event({ installation_id: '33333333-3333-4333-8333-333333333333' }));
     const error = await plugin
       .verifiedEvent(stranger, sign(SECRET, stranger))
       .catch((caught) => caught);
-    expect(error).toBeInstanceOf(UnknownInstallation);
-    expect(error.status).toBe(503);
+    expect(error).toBeInstanceOf(Unprovisioned);
+    expect(error).toMatchObject({ status: 409, code: 'plugin.unprovisioned' });
   });
 
   it('still running elsewhere are retried, not answered as done', async () => {

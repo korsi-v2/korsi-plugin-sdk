@@ -16,6 +16,11 @@
  * instead of being told `busy` forever. So an event runs at least once, and handlers must be
  * idempotent. Keep the log where the plugin keeps its own data (an `INSERT ... ON CONFLICT DO
  * UPDATE ... WHERE` is a claim); `MemoryEventLog` forgets on restart and suits tests.
+ *
+ * Any log is a convenience that spares a repeat, not a guarantee (ADR-0086): Korsi delivers at
+ * least once -- after a restart, a timeout or a credential given again -- so a handler that must
+ * not do a thing twice keys it in the plugin's records, where a write under the same external id
+ * replaces rather than doubles.
  */
 
 export type ClaimStatus = 'new' | 'busy' | 'done';

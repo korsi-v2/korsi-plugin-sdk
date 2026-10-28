@@ -1,14 +1,20 @@
 /**
  * What Korsi sends a plugin's server, read into typed values.
  *
- * Korsi calls four addresses under the plugin's `base_url`, each signed (`./signature.ts`):
+ * Korsi calls five addresses under the plugin's `base_url`, each signed (`./signature.ts`):
  *
  * - `POST /korsi/lifecycle` -- `installed` (with the credential) or `removed`;
  * - `POST /korsi/events` -- an event, at least once;
  * - `POST /korsi/tools/{name}` -- Korsyar asks on a person's behalf, with their sealed handle;
+ * - `POST /korsi/actions/{name}` -- an `ActionCall`: make one change a person confirmed on a card
+ *   the plugin's specialist prepared (ADR-0080), with their sealed handle, at least once;
  * - `POST /korsi/connections` -- a `ConnectionCall` about a person's connected account: check these
  *   credentials, tell me what changed, act on their calendar (ADR-0067). The person's secrets are
  *   in it, for this call only.
+ *
+ * Any of them may be answered `409 { "code": "plugin.unprovisioned" }` by a plugin that has no
+ * credential for the installation -- a container with no disk, restarted: Korsi gives it the
+ * credential again and asks once more (ADR-0086).
  *
  * These parse a body that has already been verified; `KorsiPlugin` does both.
  */
@@ -19,7 +25,11 @@ import type { RawBody } from './signature.js';
 export const LIFECYCLE_PATH = '/korsi/lifecycle';
 export const EVENTS_PATH = '/korsi/events';
 export const TOOLS_PATH = '/korsi/tools/';
+export const ACTIONS_PATH = '/korsi/actions/';
 export const CONNECTIONS_PATH = '/korsi/connections';
+
+/** How long Korsi waits for an action's answer, unless the call says otherwise: 30 seconds. */
+export const ACTION_DEADLINE_SECONDS = 30;
 
 /** The kinds of connection call, as `ConnectionCall.call` names them. */
 export const VERIFY = 'connection.verify';
@@ -41,6 +51,13 @@ export const Topic = Object.freeze({
   mailReceived: 'source.message.received',
   /** Their mailbox no longer has a message. Korsi keeps it; it may be filed or cited. */
   mailDeleted: 'source.message.deleted',
+  /** Under `meetings.read` (ADR-0083); a restricted meeting's go only to the installation hosting it. */
+  meetingStarted: 'meeting.started',
+  meetingEnded: 'meeting.ended',
+  /** The transcript read from the recording is ready: the record, where the live text was a preview. */
+  meetingTranscriptReady: 'meeting.transcript_ready',
+  /** Under `cases.read` (ADR-0084): a case changed stage, whoever moved it. */
+  caseStageMoved: 'operation.case.stage_moved',
 } as const);
 
 /** A body that is not what Korsi sends. Answer 400. */
@@ -101,7 +118,7 @@ export interface Installation {
   apiBase: string;
   /** The installation's own credential, for `/plugin/v1` and Korsi's MCP server. */
   token: string;
-  /** What Korsi signs every event and tool call for this installation with. */
+  /** What Korsi signs every call it makes to this installation with. */
   signingSecret: string;
   scopes: string[];
   settings: Record<string, unknown>;
@@ -203,10 +220,16 @@ export function parseEvent(payload: Json): KorsiEvent {
   };
 }
 
+const keys = (payload: Json, key: string): string[] => {
+  const value = payload[key] ?? [];
+  if (!Array.isArray(value)) throw new MalformedRequest(`${key} is not a list`);
+  return value.map(String);
+};
+
 /**
- * Korsyar asking one of the plugin's tools, for a person. Read Korsi with `handle`: it is that
+ * Korsyar asking one of the plugin's read tools, for a person. Read Korsi with `handle`: it is that
  * person, narrowed to this installation's scopes, for five minutes. Answer `{ content }` within ten
- * seconds, and change nothing: a tool that wants a change sends a proposal.
+ * seconds, and change nothing: a tool that wants a change sends a proposal, or is an action tool.
  */
 export interface ToolCall {
   name: string;
@@ -215,6 +238,11 @@ export interface ToolCall {
   arguments: Record<string, unknown>;
   handle: string;
   locale: string | null;
+  /**
+   * The plugin's own permissions the person holds in this installation, by their bare keys
+   * (`see_compensation`, ADR-0082). Inside the plugin, enforcing them is the plugin's job.
+   */
+  permissions: string[];
 }
 
 export function parseToolCall(name: string, payload: Json): ToolCall {
@@ -225,6 +253,92 @@ export function parseToolCall(name: string, payload: Json): ToolCall {
     arguments: object(payload, 'arguments'),
     handle: text(payload, 'handle'),
     locale: (payload.locale as string | undefined) ?? null,
+    permissions: keys(payload, 'permissions'),
+  };
+}
+
+/** One of the plugin's own records, by the plugin's own keys for it. */
+export interface RecordRef {
+  type: string;
+  external_id: string;
+}
+
+/**
+ * What became of an earlier change on the same card, as Korsi sends it: the case a `case.create`
+ * made (`result.case_id`), the records an action wrote. An `ActionCall` carries those of the
+ * changes it builds on, applied ones only.
+ */
+export interface ChangeOutcome {
+  key: string;
+  status: 'applied' | 'failed' | 'skipped';
+  skipped_because?: 'unticked' | 'earlier_not_applied' | null;
+  /** An action's: what the plugin said it did, and the records it wrote. */
+  summary?: string | null;
+  records?: RecordRef[];
+  /** A proposal's: the proposal Korsi recorded for it, and what applying it produced. */
+  proposal_id?: string | null;
+  result?: Record<string, unknown> | null;
+  error_code?: string | null;
+  error_params?: Record<string, unknown> | null;
+}
+
+/**
+ * Korsi making one change a person confirmed (ADR-0080). The plugin's specialist used one of its
+ * *action* tools in Korsyar's conversation; that prepared a card and nothing else; the person
+ * confirmed it -- maybe after editing it -- and now Korsi calls `POST /korsi/actions/{name}` with
+ * exactly the arguments the card showed, checked against the tool's `input_schema` again.
+ *
+ * - Read and write Korsi with `handle`: it is that person, narrowed to this installation's scopes.
+ * - **At least once.** `idempotencyKey` (`<cardId>:<changeKey>`) is the same on every delivery of
+ *   this change: make the change under it, so a second delivery -- after a restart, the process's
+ *   memory gone -- finds it made and answers the same.
+ * - `earlier` holds what the changes it builds on produced, by their keys: a position created
+ *   under the case the card's `case.create` made reads `earlier.case.result.case_id`.
+ * - Answer within `deadlineSeconds`, with `{ ok: true, summary, records }` or, refusing,
+ *   `{ ok: false, error: { code, message } }` in `locale`: the card shows it as the plugin's words.
+ */
+export interface ActionCall {
+  name: string;
+  installationId: string;
+  /** The person who confirmed the card, whom `handle` stands for. */
+  userId: string;
+  arguments: Record<string, unknown>;
+  handle: string;
+  /** The plugin plane's address, as the installation's own. */
+  apiBase: string;
+  locale: string;
+  /** The plugin's own permissions the person holds, by their bare keys, as a tool call has them. */
+  permissions: string[];
+  cardId: string;
+  changeKey: string;
+  idempotencyKey: string;
+  earlier: Record<string, ChangeOutcome>;
+  deadlineSeconds: number;
+}
+
+/** A body naming another tool than the address it came to: the signature does not cover the path. */
+export function parseActionCall(name: string, payload: Json): ActionCall {
+  const tool = text(payload, 'tool');
+  if (tool !== name) throw new MalformedRequest(`the body is for ${tool}, not ${name}`);
+  const earlier = object(payload, 'earlier');
+  const deadlineSeconds = Number(payload.deadline_seconds ?? ACTION_DEADLINE_SECONDS);
+  if (!Number.isInteger(deadlineSeconds) || deadlineSeconds < 1) {
+    throw new MalformedRequest('deadline_seconds is not readable');
+  }
+  return {
+    name,
+    installationId: uuid(payload, 'installation_id'),
+    userId: uuid(payload, 'user_id'),
+    arguments: object(payload, 'arguments'),
+    handle: text(payload, 'handle'),
+    apiBase: text(payload, 'api_base').replace(/\/+$/, ''),
+    locale: String(payload.locale || 'fa'),
+    permissions: keys(payload, 'permissions'),
+    cardId: uuid(payload, 'card_id'),
+    changeKey: text(payload, 'change_key'),
+    idempotencyKey: text(payload, 'idempotency_key'),
+    earlier: earlier as Record<string, ChangeOutcome>,
+    deadlineSeconds,
   };
 }
 
