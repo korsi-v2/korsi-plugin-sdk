@@ -1,7 +1,10 @@
 """The server side of a Korsi plugin.
 
-* :class:`KorsiPlugin` -- the lifecycle, events, tool calls and a page's caller, verified;
+* :class:`KorsiPlugin` -- the lifecycle, events, tool calls, action calls, connection calls and a
+  page's caller, verified;
 * :class:`KorsiClient` -- the plugin plane (``/plugin/v1``), typed from Korsi's OpenAPI document;
+* :mod:`korsi_plugin.manifest` -- the manifest's types (``korsi-plugin.yaml``), from Korsi's
+  published schema;
 * :func:`verify_signature` -- ``Korsi-Signature``, for a server that wants only that;
 * :class:`Wallet` and :meth:`KorsiClient.reserve` -- MU, exactly, and reserve-then-settle.
 
@@ -9,7 +12,16 @@ The design behind every rule here is Korsi's plugin architecture (ADR-0058); the
 at ``developers.korsi.ai``.
 """
 
-from korsi_plugin.client import PLUGIN_API, VERSION_HEADER, Caller, KorsiClient, Quantity
+from korsi_plugin.client import (
+    CONTENT_TIMEOUT_SECONDS,
+    MODEL_TIMEOUT_SECONDS,
+    PLUGIN_API,
+    TEXT_WAIT_SECONDS,
+    VERSION_HEADER,
+    Caller,
+    KorsiClient,
+    Quantity,
+)
 from korsi_plugin.dedupe import (
     DEFAULT_LEASE_SECONDS,
     ClaimStatus,
@@ -18,6 +30,8 @@ from korsi_plugin.dedupe import (
     SQLiteEventLog,
 )
 from korsi_plugin.deliveries import (
+    ACTION_DEADLINE_SECONDS,
+    ACTIONS_PATH,
     CALENDAR,
     CONNECTIONS_PATH,
     EVENTS_PATH,
@@ -25,11 +39,14 @@ from korsi_plugin.deliveries import (
     SYNC,
     TOOLS_PATH,
     VERIFY,
+    ActionCall,
+    ChangeOutcome,
     ConnectionCall,
     Event,
     Installation,
     Installed,
     MalformedRequest,
+    RecordRef,
     Removed,
     ToolCall,
     Topic,
@@ -41,11 +58,20 @@ from korsi_plugin.errors import (
     KorsiUnreachable,
     RequestRejected,
     credential_refused,
+    is_publisher_funds,
     is_rate_limited,
+    is_text_pending,
+    text_pending_seconds,
 )
 from korsi_plugin.operations import ROUTES, PlaneOperations
 from korsi_plugin.plugin import (
     INSTALLATION_HEADER,
+    ActionAnswer,
+    ActionArgumentsRejected,
+    ActionContext,
+    ActionHandler,
+    ActionRefusal,
+    ActionUnknown,
     CallReplayed,
     CredentialMismatch,
     EventInProgress,
@@ -74,23 +100,36 @@ from korsi_plugin.wallet import Reservation, Wallet, is_no_active_plan, is_walle
 __version__ = "0.1.0"
 
 __all__ = [
+    "ACTIONS_PATH",
+    "ACTION_DEADLINE_SECONDS",
     "CALENDAR",
     "CONNECTIONS_PATH",
+    "CONTENT_TIMEOUT_SECONDS",
     "DEFAULT_LEASE_SECONDS",
     "DEFAULT_TOLERANCE_SECONDS",
     "EVENTS_PATH",
     "EVENT_ID_HEADER",
     "INSTALLATION_HEADER",
     "LIFECYCLE_PATH",
+    "MODEL_TIMEOUT_SECONDS",
     "PLUGIN_API",
     "ROUTES",
     "SIGNATURE_HEADER",
     "SYNC",
+    "TEXT_WAIT_SECONDS",
     "TOOLS_PATH",
     "VERIFY",
     "VERSION_HEADER",
+    "ActionAnswer",
+    "ActionArgumentsRejected",
+    "ActionCall",
+    "ActionContext",
+    "ActionHandler",
+    "ActionRefusal",
+    "ActionUnknown",
     "CallReplayed",
     "Caller",
+    "ChangeOutcome",
     "ClaimStatus",
     "Code",
     "ConnectionCall",
@@ -115,6 +154,7 @@ __all__ = [
     "Person",
     "PlaneOperations",
     "Quantity",
+    "RecordRef",
     "Removed",
     "RequestRejected",
     "Reservation",
@@ -130,8 +170,11 @@ __all__ = [
     "api_base_problem",
     "credential_refused",
     "is_no_active_plan",
+    "is_publisher_funds",
     "is_rate_limited",
+    "is_text_pending",
     "is_wallet_insufficient",
     "sign",
+    "text_pending_seconds",
     "verify_signature",
 ]

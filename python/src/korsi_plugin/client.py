@@ -8,10 +8,16 @@ OpenAPI document (:mod:`korsi_plugin.models`).
 Use one :class:`KorsiClient` per bearer. Alone it owns its connection pool -- close it, or use it as
 an ``async with`` block; from :meth:`korsi_plugin.KorsiPlugin.client` it shares the plugin's pool,
 and closing it does nothing.
+
+Korsi is reached through the egress proxy the environment names (``HTTPS_PROXY``, ``HTTP_PROXY``,
+``NO_PROXY``), as ``httpx`` reads them when no ``transport`` is given: a plugin Korsi runs has no
+other way out of its container.
 """
 
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
@@ -22,22 +28,40 @@ from urllib.parse import quote
 
 import httpx
 
-from korsi_plugin.errors import KorsiRefused, KorsiUnreachable
+from korsi_plugin.errors import (
+    Code,
+    KorsiRefused,
+    KorsiUnreachable,
+    is_text_pending,
+    text_pending_seconds,
+)
 from korsi_plugin.models import (
     Authority,
     Colleague,
+    FindFreeSlots,
+    FreeSlotPage,
     HoldView,
+    HostMeeting,
     InstallationState,
     IntakeResult,
     IntakeSource,
+    LiveTranscript,
+    MeetingDetail,
+    ModelCompletion,
     PeoplePage,
     PluginEventPage,
     PluginEventView,
+    PluginFile,
+    PluginFileText,
+    PluginModel,
+    PluginModelPage,
     PluginSelf,
     ProposalPage,
     ProposalView,
+    QueryRecords,
     RecordPage,
     RecordView,
+    RequestCompletion,
     SubmitProposal,
     WalletView,
 )
@@ -46,10 +70,20 @@ from korsi_plugin.wallet import Reservation
 
 #: Korsi answers a person's page in well under this; a plugin that waits longer looks broken.
 DEFAULT_TIMEOUT_SECONDS: Final = 15.0
+#: How long a model completion may take: more than Korsi gives the model (180 seconds), so the
+#: answer -- or Korsi's own refusal -- arrives rather than this SDK giving up first.
+MODEL_TIMEOUT_SECONDS: Final = 210.0
+#: How long a file's bytes may take to arrive.
+CONTENT_TIMEOUT_SECONDS: Final = 120.0
+#: How long ``file_text(..., wait=True)`` waits for a scan to be read, by default.
+TEXT_WAIT_SECONDS: Final = 600.0
 #: The plane's version, sent by Korsi on every response.
 VERSION_HEADER: Final = "Korsi-Plugin-API"
 #: The plugin API this SDK was generated for. A Korsi on another major version is not this contract.
-PLUGIN_API: Final = "1.1"
+PLUGIN_API: Final = "1.2"
+
+#: Backoff before each repeat of a model completion, in seconds.
+_COMPLETE_BACKOFF: Final = (1.0, 4.0, 10.0)
 
 #: A quantity of a service: exact, never a float.
 Quantity = Decimal | int | str
@@ -80,6 +114,12 @@ class Caller:
     authority: Authority
     user_id: uuid.UUID | None
     scopes: tuple[str, ...]
+    #: The plugin's own permissions (ADR-0082) the person holds in this installation, by their bare
+    #: keys (``see_compensation``); empty for the installation itself. Korsi enforces them where it
+    #: shows the plugin's things; inside the plugin's own routes the plugin does, by this. A page's
+    #: caller is reused for ``handle_cache_seconds`` (60 by default), so a revoke reaches the plugin
+    #: that much later; set it lower where that matters.
+    permissions: tuple[str, ...] = ()
     settings: Mapping[str, Any] = field(default_factory=dict)
     locale: str = "fa"
     timezone: str = "Asia/Tehran"
@@ -101,6 +141,7 @@ class Caller:
             authority=view["authority"],
             user_id=uuid.UUID(user) if user else None,
             scopes=tuple(view.get("scopes") or ()),
+            permissions=tuple(view.get("permissions") or ()),
             settings=view.get("settings") or {},
             locale=view.get("locale") or "fa",
             timezone=view.get("timezone") or "Asia/Tehran",
@@ -113,6 +154,17 @@ def _id(value: str | uuid.UUID) -> str:
 
 def _amount(value: Quantity) -> str:
     return str(Decimal(value))
+
+
+def _completion_retryable(error: Exception) -> bool:
+    """Whether a completion that failed this way is worth asking again with the same key."""
+    if isinstance(error, KorsiUnreachable):
+        return True
+    return (
+        isinstance(error, KorsiRefused)
+        and error.problem
+        and error.code in (Code.SERVICE_UNAVAILABLE, Code.PROVIDER_UNREACHABLE)
+    )
 
 
 def _query(value: Any) -> Any:
@@ -169,20 +221,40 @@ class KorsiClient(PlaneOperations):
         *,
         json: Any = None,
         params: Mapping[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> Any:
-        query = {key: _query(value) for key, value in (params or {}).items() if value is not None}
+        request = self._request(method, path, json=json, params=params, timeout=timeout)
         try:
-            response = await self._http.request(
-                method,
-                self.api_base + path,
-                json=json,
-                params=query,
-                headers=self._headers,
-                follow_redirects=False,
-            )
+            response = await self._http.send(request, follow_redirects=False)
         except httpx.HTTPError as error:
             msg = f"{method} {path}: {type(error).__name__}"
             raise KorsiUnreachable(msg) from error
+        self._answered(method, path, response)
+        if response.status_code == 204 or not response.content:
+            return None
+        return response.json()
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        params: Mapping[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> httpx.Request:
+        query = {key: _query(value) for key, value in (params or {}).items() if value is not None}
+        return self._http.build_request(
+            method,
+            self.api_base + path,
+            json=json,
+            params=query,
+            headers=self._headers,
+            timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
+        )
+
+    def _answered(self, method: str, path: str, response: httpx.Response) -> None:
+        """Korsi's version, and its answer unless it is a redirect or a refusal (read already)."""
         self.plugin_api = response.headers.get(VERSION_HEADER, self.plugin_api)
         if 300 <= response.status_code < 400:
             # The plane does not redirect. Following one would carry the bearer to another host,
@@ -191,9 +263,6 @@ class KorsiClient(PlaneOperations):
             raise KorsiUnreachable(msg)
         if response.status_code >= 400:
             raise _refusal(response)
-        if response.status_code == 204 or not response.content:
-            return None
-        return response.json()
 
     # -- who ---------------------------------------------------------------------------------------
 
@@ -217,25 +286,71 @@ class KorsiClient(PlaneOperations):
         type_key: str,
         *,
         case_id: str | uuid.UUID | None = None,
+        query: str | None = None,
         cursor: str | None = None,
         limit: int = 50,
     ) -> RecordPage:
-        """One page of this plugin's records of a type; ``next_cursor`` reads the next."""
-        params = {"case_id": str(case_id) if case_id else None, "cursor": cursor, "limit": limit}
+        """One page of this plugin's records of a type, newest first; ``next_cursor`` reads the
+        next. ``query`` keeps those with these words in their title."""
+        params = {
+            "case_id": str(case_id) if case_id else None,
+            "query": query,
+            "cursor": cursor,
+            "limit": limit,
+        }
         return cast(RecordPage, await self._call("GET", f"/records/{_id(type_key)}", params=params))
 
     async def iter_records(
-        self, type_key: str, *, case_id: str | uuid.UUID | None = None, page_size: int = 200
+        self,
+        type_key: str,
+        *,
+        case_id: str | uuid.UUID | None = None,
+        query: str | None = None,
+        page_size: int = 200,
     ) -> AsyncIterator[RecordView]:
         """Every record of a type, page by page."""
         cursor: str | None = None
         while True:
-            page = await self.records(type_key, case_id=case_id, cursor=cursor, limit=page_size)
+            page = await self.records(
+                type_key, case_id=case_id, query=query, cursor=cursor, limit=page_size
+            )
             for record in page["items"]:
                 yield record
             cursor = page.get("next_cursor")
             if not cursor:
                 return
+
+    async def query_records(self, type_key: str, query: QueryRecords | None = None) -> RecordPage:
+        """This plugin's records of a type, by the fields the type declares (ADR-0085)::
+
+            await korsi.query_records("application", {
+                "where": [{"field": "stage", "op": "in", "value": ["screening", "interview"]},
+                          {"field": "fit", "op": "gte", "value": 70}],
+                "order_by": {"field": "received_at", "dir": "desc"},
+            })
+
+        Up to five conditions, all of which must hold; operators ``eq``, ``in``, ``gt``, ``gte``,
+        ``lt``, ``lte``, ``prefix``, ``exists``. Read through the same visibility as
+        :meth:`records`: on a person's behalf, only what that person may see. A field the type does
+        not declare is ``422 plugin.record_field_unknown``. Pass ``next_cursor`` back as
+        ``cursor``, with the same order.
+        """
+        path = f"/records/{_id(type_key)}/query"
+        return cast(RecordPage, await self._call("POST", path, json=dict(query or {})))
+
+    async def iter_query_records(
+        self, type_key: str, query: QueryRecords | None = None, *, page_size: int = 200
+    ) -> AsyncIterator[RecordView]:
+        """Every record a query finds, page by page."""
+        body = cast(QueryRecords, {**(query or {}), "limit": page_size})
+        while True:
+            page = await self.query_records(type_key, body)
+            for record in page["items"]:
+                yield record
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+            body = cast(QueryRecords, {**body, "cursor": cursor})
 
     async def record(self, type_key: str, external_id: str) -> RecordView | None:
         """One of this plugin's records, or ``None`` when there is none by that id."""
@@ -360,6 +475,180 @@ class KorsiClient(PlaneOperations):
         return Reservation(
             self, service, quantity, idempotency_key=idempotency_key, reference=reference
         )
+
+    # -- files a person handed the plugin ----------------------------------------------------------
+
+    async def file(self, file_id: str | uuid.UUID) -> PluginFile:
+        """A file a person handed this installation in Korsi's own picker (the Bridge's
+        ``pickFile``, ``files.read``). Any other is ``404 plugin.file_not_granted``. Read on their
+        behalf or, for work done later, as the installation itself."""
+        return cast(PluginFile, await self._call("GET", f"/files/{_id(file_id)}"))
+
+    async def file_content(
+        self, file_id: str | uuid.UUID, *, timeout: float = CONTENT_TIMEOUT_SECONDS
+    ) -> bytes:
+        """The file's bytes as the person gave them, all at once; :meth:`iter_file_content`
+        streams them. :meth:`file`'s ``media_type`` is what Korsi read them as: for showing,
+        never for trusting."""
+        return b"".join([chunk async for chunk in self.iter_file_content(file_id, timeout=timeout)])
+
+    async def iter_file_content(
+        self,
+        file_id: str | uuid.UUID,
+        *,
+        timeout: float = CONTENT_TIMEOUT_SECONDS,
+        chunk_size: int = 65_536,
+    ) -> AsyncIterator[bytes]:
+        """The file's bytes, streamed, as they arrive."""
+        path = f"/files/{_id(file_id)}/content"
+        request = self._request("GET", path, timeout=timeout)
+        try:
+            response = await self._http.send(request, follow_redirects=False, stream=True)
+        except httpx.HTTPError as error:
+            msg = f"GET {path}: {type(error).__name__}"
+            raise KorsiUnreachable(msg) from error
+        try:
+            if response.status_code >= 300:
+                await response.aread()
+            self._answered("GET", path, response)
+            async for chunk in response.aiter_bytes(chunk_size):
+                yield chunk
+        except httpx.HTTPError as error:
+            msg = f"GET {path}: {type(error).__name__}"
+            raise KorsiUnreachable(msg) from error
+        finally:
+            await response.aclose()
+
+    async def file_text(
+        self,
+        file_id: str | uuid.UUID,
+        *,
+        wait: bool = False,
+        wait_seconds: float = TEXT_WAIT_SECONDS,
+    ) -> PluginFileText:
+        """The text Korsi read out of the file: plain text, Word, Excel, OpenDocument, PowerPoint
+        and a PDF's own text layer (``extraction: local``), at no cost.
+
+        A scan is read by OCR, a paid service only with ``models.use``, billed to the publisher
+        once: the first ask queues it and is refused ``409 plugin.text_pending``
+        (:func:`~korsi_plugin.is_text_pending`, :func:`~korsi_plugin.text_pending_seconds`); once
+        read, every ask answers its text (``extraction: ocr``). With ``wait=True`` this asks again
+        when Korsi says, until the text is there or ``wait_seconds`` ran out -- then it raises the
+        last refusal. Without ``models.use``, or for a file Korsi does not read, it is ``409
+        plugin.text_unavailable`` with ``params["reason"]``: ``scan``, ``ocr_unavailable``,
+        ``archive``, ``kind``, ``too_large`` or ``unreadable``. ``402 plugin.publisher_funds``
+        while the publisher's paid services are paused.
+        """
+        until = time.monotonic() + wait_seconds
+        while True:
+            try:
+                found = await self._call("GET", f"/files/{_id(file_id)}/text")
+            except KorsiRefused as refused:
+                if not wait or not is_text_pending(refused):
+                    raise
+                pause = text_pending_seconds(refused)
+                if time.monotonic() + pause > until:
+                    raise
+                await asyncio.sleep(pause)
+                continue
+            return cast(PluginFileText, found)
+
+    # -- Korsi's language models (models.use, a trusted scope) -------------------------------------
+
+    async def models(self) -> list[PluginModel]:
+        """The models Korsi lends this plugin, with their price per million tokens in dollars."""
+        page = cast(PluginModelPage, await self._call("GET", "/models"))
+        return list(page["items"])
+
+    async def complete(
+        self,
+        request: RequestCompletion,
+        *,
+        timeout: float = MODEL_TIMEOUT_SECONDS,
+        retries: int = 2,
+    ) -> ModelCompletion:
+        """One answer from one of Korsi's models, at the publisher's cost (ADR-0081).
+
+        Korsi calls the model for the plugin, so the plugin brings no key and the organization's
+        data goes nowhere Korsi's own does not. ``usd_cost`` is what Korsi charged the publisher,
+        as an exact decimal string; ``finish_reason`` ``length`` is an answer cut at
+        ``max_tokens``::
+
+            answer = await korsi.complete({
+                "model": model,  # one of models()
+                "max_tokens": 800,
+                "purpose": "cv_extract",  # shown in the publisher's ledger
+                "idempotency_key": f"cv:{file_id}:v1",
+                "messages": [{"role": "system", "content": PROMPT},
+                             {"role": "user", "content": text}],
+                "response_format": {"type": "json_object"},
+            })
+
+        The same ``idempotency_key`` is answered with the first answer for an hour, at no cost,
+        and a retry that arrives while the first attempt still runs waits for it -- so this asks
+        again with it, up to ``retries`` times, when Korsi did not answer or said to try again
+        (``503 service.unavailable``, ``502 provider.unreachable``). Refusals to branch on:
+        ``402 plugin.publisher_funds`` (:func:`~korsi_plugin.is_publisher_funds`: the publisher's
+        paid services are paused), ``422 plugin.model_not_allowed``, ``429 plugin.rate_limited``
+        (the ``models`` budget; ``retry_after``), and ``422 request.invalid`` for a key used for
+        another request.
+        """
+        attempt = 0
+        while True:
+            try:
+                answer = await self._call(
+                    "POST", "/models/complete", json=dict(request), timeout=timeout
+                )
+            except (KorsiRefused, KorsiUnreachable) as error:
+                if attempt >= retries or not _completion_retryable(error):
+                    raise
+                await asyncio.sleep(_COMPLETE_BACKOFF[min(attempt, len(_COMPLETE_BACKOFF) - 1)])
+                attempt += 1
+                continue
+            return cast(ModelCompletion, answer)
+
+    # -- the calendar and meetings -----------------------------------------------------------------
+
+    async def free_slots(self, search: FindFreeSlots) -> FreeSlotPage:
+        """When every one of these people -- active members, at most 20 -- is free for
+        ``duration_minutes``, from day ``from`` to day ``to`` (``2026-11-02``, at most 31 days),
+        inside the organization's working hours unless ``within_hours`` is false (ADR-0085).
+
+        Times only, never what fills anybody's time; nothing is booked. On a person's behalf
+        only, under ``calendar.read``.
+        """
+        found = await self._call("POST", "/calendar/free-slots", json=dict(search))
+        return cast(FreeSlotPage, found)
+
+    async def host_meeting(self, meeting: HostMeeting) -> MeetingDetail:
+        """Host a meeting for the person in front of the plugin (``meetings.host``, a trusted
+        scope; ADR-0083).
+
+        They create it, and must be able to open ``case_id``. The same ``external_id`` answers the
+        meeting already made. Its attendees are ``participant_user_ids`` (members, the person in
+        front of the plugin too when named) and ``guests``, people with no account by ``{"name"}``
+        alone (at most 10, 50 people in all): a guest's name grants nothing. A ``restricted``
+        meeting is seen only by its participants, the people in its case and this installation,
+        and never enters the organization's memory. With ``recording.consent`` ``required`` (the
+        default) Korsi asks for consent before it records.
+        The room is Korsi's own page: the plugin's page opens it with the Bridge's
+        ``showInKorsi({kind: "meeting", id})``.
+        """
+        return cast(MeetingDetail, await self._call("POST", "/meetings", json=dict(meeting)))
+
+    async def live_transcript(
+        self, meeting_id: str | uuid.UUID, *, since: str | datetime | None = None
+    ) -> LiveTranscript:
+        """What is being said in a meeting this installation hosts (``meetings.live.read``, a
+        trusted scope): a preview, not the record -- the transcript read from the recording is,
+        announced by ``meeting.transcript_ready``.
+
+        Poll it, passing ``covered_through`` back as ``since`` for what came after.
+        ``speaker_key`` stays the same for one voice, so earlier lines can take a name it is given
+        later. Any other meeting is ``404 plugin.meeting_not_hosted``.
+        """
+        path = f"/meetings/{_id(meeting_id)}/live/transcript"
+        return cast(LiveTranscript, await self._call("GET", path, params={"since": since}))
 
     # -- events, by polling ------------------------------------------------------------------------
 

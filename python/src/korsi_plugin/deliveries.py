@@ -1,15 +1,21 @@
 """What Korsi sends a plugin's server, read into typed values.
 
-Korsi calls four addresses under the plugin's ``base_url``, each signed
+Korsi calls five addresses under the plugin's ``base_url``, each signed
 (:mod:`korsi_plugin.signature`):
 
 * ``POST /korsi/lifecycle`` -- :class:`Installed` (with the credential) or :class:`Removed`;
 * ``POST /korsi/events`` -- an :class:`Event`, at least once;
 * ``POST /korsi/tools/{name}`` -- a :class:`ToolCall`: Korsyar asks on a person's behalf, with
   that person's sealed handle;
+* ``POST /korsi/actions/{name}`` -- an :class:`ActionCall`: make one change a person confirmed on a
+  card the plugin's specialist prepared (ADR-0080), with their sealed handle, at least once;
 * ``POST /korsi/connections`` -- a :class:`ConnectionCall` about a person's connected account:
   check these credentials, tell me what changed, act on their calendar (ADR-0067). The person's
   secrets are in it, for this call only.
+
+Any of them may be answered ``409 {"code": "plugin.unprovisioned"}`` by a plugin that has no
+credential for the installation -- a container with no disk, restarted: Korsi gives it the
+credential again and asks once more (ADR-0086).
 
 These parse a body that has already been verified; :class:`korsi_plugin.KorsiPlugin` does both.
 """
@@ -21,7 +27,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Final
+from typing import Any, Final, Literal, NotRequired, TypedDict, cast
 
 from korsi_plugin.errors import RequestRejected
 
@@ -29,7 +35,11 @@ from korsi_plugin.errors import RequestRejected
 LIFECYCLE_PATH: Final = "/korsi/lifecycle"
 EVENTS_PATH: Final = "/korsi/events"
 TOOLS_PATH: Final = "/korsi/tools/"
+ACTIONS_PATH: Final = "/korsi/actions/"
 CONNECTIONS_PATH: Final = "/korsi/connections"
+
+#: How long Korsi waits for an action's answer, unless the call says otherwise: 30 seconds.
+ACTION_DEADLINE_SECONDS: Final = 30
 
 #: The kinds of connection call, as ``ConnectionCall.call`` names them.
 VERIFY: Final = "connection.verify"
@@ -51,6 +61,15 @@ class Topic:
     MAIL_RECEIVED: Final = "source.message.received"
     #: Their mailbox no longer has a message. Korsi keeps it; it may be filed or cited.
     MAIL_DELETED: Final = "source.message.deleted"
+    #: Under ``meetings.read`` (ADR-0083); a restricted meeting's go only to the installation
+    #: hosting it.
+    MEETING_STARTED: Final = "meeting.started"
+    MEETING_ENDED: Final = "meeting.ended"
+    #: The transcript read from the recording is ready: the record, where the live text was a
+    #: preview.
+    MEETING_TRANSCRIPT_READY: Final = "meeting.transcript_ready"
+    #: Under ``cases.read`` (ADR-0084): a case changed stage, whoever moved it.
+    CASE_STAGE_MOVED: Final = "operation.case.stage_moved"
 
 
 class MalformedRequest(RequestRejected):
@@ -87,6 +106,22 @@ def _text(payload: Mapping[str, Any], key: str) -> str:
     return value
 
 
+def _keys(payload: Mapping[str, Any], key: str) -> tuple[str, ...]:
+    value = payload.get(key) or []
+    if not isinstance(value, list):
+        msg = f"{key} is not a list"
+        raise MalformedRequest(msg)
+    return tuple(str(item) for item in value)
+
+
+def _object(payload: Mapping[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key) or {}
+    if not isinstance(value, dict):
+        msg = f"{key} is not an object"
+        raise MalformedRequest(msg)
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class Installation:
     """What a plugin keeps about one installation: Korsi's address for it and its credential.
@@ -101,7 +136,7 @@ class Installation:
     api_base: str
     #: The installation's own credential, for ``/plugin/v1`` and Korsi's MCP server.
     token: str
-    #: What Korsi signs every event and tool call for this installation with.
+    #: What Korsi signs every call it makes to this installation with.
     signing_secret: str
     scopes: tuple[str, ...] = ()
     settings: dict[str, Any] = field(default_factory=dict)
@@ -207,11 +242,12 @@ class Event:
 
 @dataclass(frozen=True, slots=True)
 class ToolCall:
-    """Korsyar asking one of the plugin's tools, for a person.
+    """Korsyar asking one of the plugin's read tools, for a person.
 
     Read Korsi with ``handle``: it is that person, narrowed to this installation's scopes, for five
     minutes -- so whatever the tool reads is what the person may read. Answer ``{"content": ...}``
-    within ten seconds, and change nothing: a tool that wants a change sends a proposal.
+    within ten seconds, and change nothing: a tool that wants a change sends a proposal, or is an
+    action tool.
     """
 
     name: str
@@ -220,20 +256,115 @@ class ToolCall:
     arguments: dict[str, Any]
     handle: str
     locale: str | None
+    #: The plugin's own permissions the person holds in this installation, by their bare keys
+    #: (``see_compensation``, ADR-0082). Inside the plugin, enforcing them is the plugin's job.
+    permissions: tuple[str, ...] = ()
 
     @classmethod
     def parse(cls, name: str, payload: Mapping[str, Any]) -> ToolCall:
-        arguments = payload.get("arguments") or {}
-        if not isinstance(arguments, dict):
-            msg = "arguments is not an object"
+        return cls(
+            name=name,
+            installation_id=_uuid(payload, "installation_id"),
+            user_id=_uuid(payload, "user_id"),
+            arguments=_object(payload, "arguments"),
+            handle=_text(payload, "handle"),
+            locale=payload.get("locale"),
+            permissions=_keys(payload, "permissions"),
+        )
+
+
+class RecordRef(TypedDict):
+    """One of the plugin's own records, by the plugin's own keys for it."""
+
+    type: str
+    external_id: str
+
+
+class ChangeOutcome(TypedDict):
+    """What became of an earlier change on the same card, as Korsi sends it: the case a
+    ``case.create`` made (``result["case_id"]``), the records an action wrote."""
+
+    key: str
+    status: Literal["applied", "failed", "skipped"]
+    skipped_because: NotRequired[Literal["unticked", "earlier_not_applied"] | None]
+    #: An action's: what the plugin said it did, and the records it wrote.
+    summary: NotRequired[str | None]
+    records: NotRequired[list[RecordRef]]
+    #: A proposal's: the proposal Korsi recorded for it, and what applying it produced.
+    proposal_id: NotRequired[str | None]
+    result: NotRequired[dict[str, Any] | None]
+    error_code: NotRequired[str | None]
+    error_params: NotRequired[dict[str, Any] | None]
+
+
+@dataclass(frozen=True, slots=True)
+class ActionCall:
+    """Korsi making one change a person confirmed (ADR-0080).
+
+    The plugin's specialist used one of its *action* tools in Korsyar's conversation; that prepared
+    a card and nothing else; the person confirmed it -- maybe after editing it -- and now Korsi
+    calls ``POST /korsi/actions/{name}`` with exactly the arguments the card showed, checked
+    against the tool's ``input_schema`` again.
+
+    * Read and write Korsi with ``handle``: it is that person, narrowed to this installation's
+      scopes.
+    * **At least once.** ``idempotency_key`` (``<card_id>:<change_key>``) is the same on every
+      delivery of this change: make the change under it, so a second delivery -- after a restart,
+      the process's memory gone -- finds it made and answers the same.
+    * ``earlier`` holds what the changes it builds on produced, by their keys: a position created
+      under the case the card's ``case.create`` made reads ``earlier["case"]["result"]["case_id"]``.
+    * Answer within ``deadline_seconds``, with ``{"ok": True, "summary", "records"}`` or, refusing,
+      ``{"ok": False, "error": {"code", "message"}}`` in ``locale``: the card shows it as the
+      plugin's words.
+    """
+
+    name: str
+    installation_id: uuid.UUID
+    #: The person who confirmed the card, whom ``handle`` stands for.
+    user_id: uuid.UUID
+    arguments: dict[str, Any]
+    handle: str
+    #: The plugin plane's address, as the installation's own.
+    api_base: str
+    locale: str
+    #: The plugin's own permissions the person holds, by their bare keys, as a tool call has them.
+    permissions: tuple[str, ...]
+    card_id: uuid.UUID
+    change_key: str
+    idempotency_key: str
+    earlier: dict[str, ChangeOutcome]
+    deadline_seconds: int
+
+    @classmethod
+    def parse(cls, name: str, payload: Mapping[str, Any]) -> ActionCall:
+        """Refuses a body naming another tool than the address: the signature does not cover the
+        path."""
+        tool = _text(payload, "tool")
+        if tool != name:
+            msg = f"the body is for {tool}, not {name}"
+            raise MalformedRequest(msg)
+        try:
+            deadline = int(payload.get("deadline_seconds", ACTION_DEADLINE_SECONDS))
+        except (TypeError, ValueError) as error:
+            msg = "deadline_seconds is not readable"
+            raise MalformedRequest(msg) from error
+        if deadline < 1:
+            msg = "deadline_seconds is not readable"
             raise MalformedRequest(msg)
         return cls(
             name=name,
             installation_id=_uuid(payload, "installation_id"),
             user_id=_uuid(payload, "user_id"),
-            arguments=arguments,
+            arguments=_object(payload, "arguments"),
             handle=_text(payload, "handle"),
-            locale=payload.get("locale"),
+            api_base=_text(payload, "api_base").rstrip("/"),
+            locale=str(payload.get("locale") or "fa"),
+            permissions=_keys(payload, "permissions"),
+            card_id=_uuid(payload, "card_id"),
+            change_key=_text(payload, "change_key"),
+            idempotency_key=_text(payload, "idempotency_key"),
+            earlier=cast(dict[str, ChangeOutcome], _object(payload, "earlier")),
+            deadline_seconds=deadline,
         )
 
 

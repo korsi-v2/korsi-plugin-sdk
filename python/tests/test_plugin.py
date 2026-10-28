@@ -299,12 +299,16 @@ async def test_an_event_signed_with_another_secret_is_refused(plugin: KorsiPlugi
         await plugin.event(raw, sign("not-it", raw), handler)
 
 
-async def test_an_event_for_an_installation_not_known_yet_is_retried(plugin: KorsiPlugin) -> None:
-    # The plugin may have been down when Korsi delivered `installed`; a 4xx would lose the event.
+async def test_an_event_for_an_installation_not_known_yet_is_unprovisioned(
+    plugin: KorsiPlugin,
+) -> None:
+    # The plugin may have been down when Korsi delivered `installed`, or restarted with nothing
+    # kept: Korsi gives the credential again on this code, and delivers the event once more.
     raw = body(event(installation_id=str(uuid.uuid4())))
-    with pytest.raises(UnknownInstallation) as raised:
+    with pytest.raises(Unprovisioned) as raised:
         await plugin.verified_event(raw, sign(SECRET, raw))
-    assert raised.value.status == 503
+    assert raised.value.status == 409
+    assert raised.value.code == "plugin.unprovisioned"
 
 
 async def test_an_event_another_delivery_still_runs_is_retried_not_dropped(

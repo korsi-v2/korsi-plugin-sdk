@@ -24,6 +24,10 @@ class RequestRejected(Exception):
     """
 
     status: int = 400
+    #: Korsi's code for the refusal, where Korsi acts on it -- ``plugin.unprovisioned`` -- else
+    #: ``None``. Answer it in the body (``{"code": ..., "detail": ...}``): Korsi reads the code,
+    #: never the status alone.
+    code: str | None = None
 
     def __init__(self, message: str, *, status: int | None = None) -> None:
         super().__init__(message)
@@ -61,8 +65,9 @@ class KorsiRefused(KorsiError):
         self.params: Mapping[str, Any] = params or {}
         self.request_id = request_id
         self.errors = errors or []
-        #: Seconds to wait before asking again, when Korsi said (``429 plugin.rate_limited``: the
-        #: installation spent one of its budgets -- reads, writes, sources, proposals).
+        #: Seconds to wait before asking again, when Korsi said (``Retry-After``): ``429
+        #: plugin.rate_limited``, the installation spent one of its budgets -- reads, writes,
+        #: sources, proposals, models; ``409 plugin.text_pending``, a scan still being read.
         self.retry_after = retry_after
         #: Whether Korsi itself answered (a problem document), rather than something in front of it
         #: -- a proxy's bare 401, a WAF's 403 -- that only looks like a refusal.
@@ -82,9 +87,12 @@ class Code:
     NOT_FOUND: Final = "resource.not_found"
     INVALID: Final = "request.invalid"
     RATE_LIMITED: Final = "request.rate_limited"
-    #: One of the installation's budgets (reads, writes, sources, proposals) is spent: ``429``,
-    #: with ``Retry-After``.
+    #: One of the installation's budgets (reads, writes, sources, proposals, models) is spent:
+    #: ``429``, with ``Retry-After``.
     PLUGIN_RATE_LIMITED: Final = "plugin.rate_limited"
+    #: Korsi itself is busy or a dependency is down: ask again, with the same idempotency key.
+    SERVICE_UNAVAILABLE: Final = "service.unavailable"
+    PROVIDER_UNREACHABLE: Final = "provider.unreachable"
 
     NOT_A_PLUGIN: Final = "plugin.not_a_plugin"
     INSTALLATION_NOT_FOUND: Final = "plugin.installation_not_found"
@@ -92,12 +100,20 @@ class Code:
     HANDLE_INVALID: Final = "plugin.handle_invalid"
     PLUGIN_NOT_VISIBLE: Final = "plugin.not_visible"
     SCOPE_MISSING: Final = "plugin.scope_missing"
+    #: The plugin's own permission keys (ADR-0082): one Korsi was asked about is not declared.
+    PERMISSION_UNKNOWN: Final = "plugin.permission_unknown"
+    #: What a plugin answers -- never what Korsi answers it -- for an installation it has no
+    #: credential for (ADR-0086): ``409 {"code": "plugin.unprovisioned"}``. Korsi gives the
+    #: credential again and asks once more; a 409 without this code is the plugin's own refusal.
+    UNPROVISIONED: Final = "plugin.unprovisioned"
 
     RECORD_TYPE_UNKNOWN: Final = "plugin.record_type_unknown"
     RECORD_INVALID: Final = "plugin.record_invalid"
     RECORD_NOT_FOUND: Final = "plugin.record_not_found"
     RECORD_VERSION_CONFLICT: Final = "plugin.record_version_conflict"
     RECORD_READ_ONLY: Final = "plugin.record_read_only"
+    #: A record query named a field its type does not declare, or compared it as it cannot be.
+    RECORD_FIELD_UNKNOWN: Final = "plugin.record_field_unknown"
 
     PROPOSAL_INVALID: Final = "plugin.proposal_invalid"
     PROPOSAL_TYPE_NOT_DECLARED: Final = "plugin.proposal_type_not_declared"
@@ -110,12 +126,48 @@ class Code:
     HOLD_NOT_FOUND: Final = "plugin.hold_not_found"
     HOLD_SETTLED: Final = "plugin.hold_settled"
 
+    #: The publisher's paid services are paused (its wallet ran out, ADR-0081): ``402``.
+    PUBLISHER_FUNDS: Final = "plugin.publisher_funds"
+    #: A model Korsi does not lend plugins: ``GET /models`` lists the ones it does.
+    MODEL_NOT_ALLOWED: Final = "plugin.model_not_allowed"
+    #: A file nobody handed this installation in Korsi's picker: ``404``.
+    FILE_NOT_GRANTED: Final = "plugin.file_not_granted"
+    #: A scan Korsi is still reading: ask again after ``params["retry_after_seconds"]`` (``409``).
+    TEXT_PENDING: Final = "plugin.text_pending"
+    #: A file Korsi will not read the text of; ``params["reason"]`` says why (``409``).
+    TEXT_UNAVAILABLE: Final = "plugin.text_unavailable"
+    #: A meeting this installation does not host: ``404``.
+    MEETING_NOT_HOSTED: Final = "plugin.meeting_not_hosted"
+
 
 def is_rate_limited(error: BaseException) -> bool:
     """Whether ``error`` is Korsi asking the plugin to slow down; ``retry_after`` says how long."""
     return isinstance(error, KorsiRefused) and (
         error.status == 429 or error.code in (Code.PLUGIN_RATE_LIMITED, Code.RATE_LIMITED)
     )
+
+
+def is_text_pending(error: BaseException) -> bool:
+    """Whether ``error`` is a scan Korsi is still reading; :func:`text_pending_seconds` says when
+    to ask again."""
+    return isinstance(error, KorsiRefused) and error.code == Code.TEXT_PENDING
+
+
+def text_pending_seconds(error: KorsiRefused, fallback: float = 30.0) -> float:
+    """How long to wait before asking a pending scan's text again, in seconds."""
+    given = error.params.get("retry_after_seconds", error.retry_after)
+    try:
+        seconds = float(given) if given is not None else fallback
+    except (TypeError, ValueError):
+        return fallback
+    return seconds if seconds > 0 else fallback
+
+
+def is_publisher_funds(error: BaseException) -> bool:
+    """Whether ``error`` is the publisher's paid services paused (ADR-0081): models, OCR and the
+    specialist stop until the publisher's wallet is topped up. Everything else keeps working, so a
+    plugin says so and goes on without them."""
+    return isinstance(error, KorsiRefused) and error.code == Code.PUBLISHER_FUNDS
 
 
 def credential_refused(error: KorsiRefused) -> bool:

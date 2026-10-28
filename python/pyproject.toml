@@ -56,6 +56,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106", "ANN"]
+# A request's own HTTP timeout: a model completion needs longer than the client's default, which an
+# asyncio.timeout around the call could only shorten.
+"src/korsi_plugin/client.py" = ["ASYNC109"]
 
 [tool.mypy]
 python_version = "3.11"
