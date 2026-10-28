@@ -210,8 +210,15 @@ describe('the hooks a page reads Korsi with', () => {
 
 describe("createKorsiTheme's cards and overrides", () => {
   it("gives cards Korsi's shadow for the mode, and merges overrides in order", () => {
-    const root = (theme: ReturnType<typeof createKorsiTheme>) =>
-      theme.components?.MuiCard?.styleOverrides?.root as { boxShadow: string };
+    // Korsi's card recipe is a function of the theme, as Korsi's own is; the shadow is compared
+    // without the spaces MUI's colour helpers put after each comma.
+    const root = (theme: ReturnType<typeof createKorsiTheme>) => {
+      const style = theme.components?.MuiCard?.styleOverrides?.root;
+      const resolved = (typeof style === 'function' ? style({ theme } as never) : style) as {
+        boxShadow: string;
+      };
+      return { ...resolved, boxShadow: resolved.boxShadow.replace(/\s+/g, '') };
+    };
     expect(root(createKorsiTheme(context() as KorsiContext)).boxShadow).toContain('rgba(0,0,0');
     const light = createKorsiTheme(null, { shape: { borderRadius: 4 } }, { spacing: 4 });
     expect(root(light).boxShadow).toContain('rgba(145,158,171');
