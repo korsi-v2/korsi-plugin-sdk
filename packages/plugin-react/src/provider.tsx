@@ -165,13 +165,46 @@ export function usePluginApi(): PluginApi {
   );
 }
 
+/** Who hears the moves a page makes through `useKorsiNavigation`, by Bridge. */
+const pageMoves = new WeakMap<KorsiBridge, Set<() => void>>();
+
+/**
+ * Called after each move the page makes through `useKorsiNavigation`. For `useKorsiTitle`, which
+ * says its title again after a move; not part of the package's API.
+ */
+export function onPageMove(bridge: KorsiBridge, listener: () => void): () => void {
+  let listeners = pageMoves.get(bridge);
+  if (!listeners) {
+    listeners = new Set();
+    pageMoves.set(bridge, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** How a move the page makes enters Korsi's history (`useKorsiNavigation`). */
+export interface KorsiMoveOptions {
+  /** No new entry: a redirect, a corrected address. */
+  replace?: boolean;
+  /**
+   * A move back to the screen before (a form or dialog closed by its own button): Korsi steps its
+   * history back when the entry before is this path, else replaces -- and an older Korsi replaces.
+   */
+  back?: boolean;
+}
+
 /**
  * Follow Korsi's address: `listener` is called when the person moves under the page (back, a tab).
- * Returns a function telling Korsi the page moved, so its address follows.
+ * Returns a function telling Korsi the page moved, so its address follows -- as a new entry in the
+ * history, so back returns to the screen before it; `{ replace: true }` moves without one, and
+ * `{ back: true }` steps Korsi back onto the screen before when that is the path (closing a form by
+ * its own button, so back is not pressed once for nothing), else replaces.
  */
 export function useKorsiNavigation(
   listener?: (path: string) => void
-): (path: string, options?: { replace?: boolean }) => void {
+): (path: string, options?: KorsiMoveOptions) => void {
   const { bridge } = useKorsi();
   const latest = useRef(listener);
   latest.current = listener;
@@ -183,7 +216,12 @@ export function useKorsiNavigation(
     };
   }, [bridge]);
   return useCallback(
-    (path: string, options?: { replace?: boolean }) => bridge?.navigate(path, options),
+    (path: string, options?: KorsiMoveOptions) => {
+      if (!bridge) return;
+      // `back` always carries `replace`: a Korsi older than `back` reads only that, and replaces.
+      bridge.navigate(path, options?.back ? { replace: true, back: true } : options);
+      pageMoves.get(bridge)?.forEach((moved) => moved());
+    },
     [bridge]
   );
 }

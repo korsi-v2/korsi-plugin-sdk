@@ -1,13 +1,20 @@
 /**
  * What every page asks of Korsi's context once it is connected: the person's dates and numbers,
- * the plugin's own server read as them, and the page's words in their language.
+ * the plugin's own server read as them, and the page's words in their language -- and, where a
+ * newer Korsi offers them, its file picker and the live room's state.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { KorsiContext } from '@korsi/bridge';
+import type {
+  KorsiContext,
+  LiveSegment,
+  MeetingLive,
+  PickedFile,
+  PickFileOptions,
+} from '@korsi/bridge';
 import { formatDate, formatDateTime, formatNumber, formatTime } from '@korsi/plugin-ui';
 
-import { useKorsiContext, usePluginApi } from './provider.js';
+import { onPageMove, useKorsi, useKorsiContext, usePluginApi } from './provider.js';
 
 type Instant = Date | string | number | null | undefined;
 
@@ -122,4 +129,134 @@ export function useMessages(messages: Messages): Translate {
     },
     [messages, lang]
   );
+}
+
+export interface FilePicker {
+  /** Whether this Korsi has a file picker (`pickFile`, plugin API 1.2); offer the button only then. */
+  supported: boolean;
+  /** While Korsi's picker is open. */
+  picking: boolean;
+  /**
+   * Open Korsi's file picker. Resolves the files the person picked -- already handed to this
+   * installation, for the plugin's server to read -- or `[]` when they closed it. Throws on a Korsi
+   * without the picker.
+   */
+  pick(options?: PickFileOptions): Promise<PickedFile[]>;
+}
+
+/** Korsi's own file picker: the person uploads into their «فایل‌های من», or picks what they have. */
+export function usePickFile(): FilePicker {
+  const { bridge } = useKorsi();
+  const [picking, setPicking] = useState(false);
+  const supported = typeof bridge?.pickFile === 'function';
+  const pick = useCallback(
+    async (options?: PickFileOptions) => {
+      if (!bridge || typeof bridge.pickFile !== 'function') {
+        throw new Error('korsi: this Korsi has no file picker (pickFile)');
+      }
+      setPicking(true);
+      try {
+        const files = await bridge.pickFile(options);
+        return Array.isArray(files) ? files : [];
+      } finally {
+        setPicking(false);
+      }
+    },
+    [bridge]
+  );
+  return useMemo(() => ({ supported, picking, pick }), [supported, picking, pick]);
+}
+
+export interface MeetingLiveView {
+  /** Whether this Korsi pushes the live room's state (`onMeetingLive`, plugin API 1.2). */
+  supported: boolean;
+  /** The room's state as last pushed, with every line heard so far; null before the first push. */
+  live: MeetingLive | null;
+}
+
+/**
+ * One meeting's lines so far and a push: a line pushed again replaces itself, a new one is added,
+ * and a name the room gives a voice (`speaker_key`) goes on that voice's earlier lines too.
+ */
+function withPush(current: MeetingLive | null, push: MeetingLive): MeetingLive {
+  const same = current?.meeting_id === push.meeting_id;
+  const lines = new Map<string, LiveSegment>(
+    same ? current.segments.map((line) => [line.id, line]) : []
+  );
+  const voices = new Map<string, Pick<LiveSegment, 'speaker' | 'speaker_user_id'>>();
+  for (const line of push.segments ?? []) {
+    lines.set(line.id, line);
+    voices.set(line.speaker_key, { speaker: line.speaker, speaker_user_id: line.speaker_user_id });
+  }
+  const segments = [...lines.values()].map((line) => {
+    const voice = voices.get(line.speaker_key);
+    return voice && voice.speaker !== line.speaker ? { ...line, ...voice } : line;
+  });
+  return { ...push, segments };
+}
+
+/**
+ * The live room's state, for a `meeting.live.panel` page (ADR-0083): the room's state and clock,
+ * and every line heard so far, following each push Korsi makes. `onPush` sees each push as it
+ * came -- for a page that only needs to know something new was said and reads the rest from its
+ * own server. The lines are a preview, never the record.
+ */
+export function useMeetingLive(onPush?: (push: MeetingLive) => void): MeetingLiveView {
+  const { bridge } = useKorsi();
+  const latest = useRef(onPush);
+  latest.current = onPush;
+  const [live, setLive] = useState<MeetingLive | null>(null);
+  const supported = typeof bridge?.onMeetingLive === 'function';
+  useEffect(() => {
+    if (!bridge || typeof bridge.onMeetingLive !== 'function') return undefined;
+    const stop = bridge.onMeetingLive((push) => {
+      latest.current?.(push);
+      setLive((current) => withPush(current, push));
+    });
+    return () => {
+      stop();
+    };
+  }, [bridge]);
+  return { supported, live };
+}
+
+/**
+ * Names what the person is looking at on the app's page in Korsi's status bar -- a record's name,
+ * «مراحل استخدام · مدیر محصول» -- over the app's name, as Korsi names its own pages (`setTitle`,
+ * `korsi:title`). Set while the component is mounted and whenever `title` changes, said again after
+ * every move (Korsi's, or the page's own through `useKorsiNavigation`), and cleared when it
+ * unmounts. Null, undefined or empty clears it, and the bar names the app alone: pass null while
+ * the record loads. Plain text, cut to 120 characters by Korsi.
+ *
+ * Use one per screen -- in the page, or in one place that knows the route: two mounted at once
+ * overwrite each other in no set order. Heard only on the installation's own app page; a panel's is
+ * ignored, and an older Korsi without `setTitle` ignores it.
+ */
+export function useKorsiTitle(title: string | null | undefined): void {
+  const { bridge } = useKorsi();
+  const text = typeof title === 'string' && title.trim() ? title : null;
+  // Korsi lets a title go when the page moves and names nothing new, so a component that stays
+  // mounted across a move -- a layout over several screens -- says it again.
+  const [moves, setMoves] = useState(0);
+
+  useEffect(() => {
+    if (!bridge || typeof bridge.setTitle !== 'function') return undefined;
+    const again = () => setMoves((count) => count + 1);
+    const stopKorsi = bridge.onNavigate(again);
+    const stopPage = onPageMove(bridge, again);
+    return () => {
+      stopKorsi();
+      stopPage();
+    };
+  }, [bridge]);
+
+  useEffect(() => {
+    if (bridge && typeof bridge.setTitle === 'function') bridge.setTitle(text);
+  }, [bridge, text, moves]);
+
+  // Its own effect, so a new title or a move does not clear the bar first and blink it.
+  useEffect(() => {
+    if (!bridge || typeof bridge.setTitle !== 'function') return undefined;
+    return () => bridge.setTitle?.(null);
+  }, [bridge]);
 }
