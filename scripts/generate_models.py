@@ -1,7 +1,8 @@
-"""Write the plugin plane's types and calls, for both SDKs, from Korsi's own OpenAPI document.
+"""Write the plugin plane's types and calls, and the manifest's types, for both SDKs, from Korsi's
+own documents.
 
     python3 scripts/generate_models.py          # rewrite the generated files
-    python3 scripts/generate_models.py --check  # fail if they are not what the document says
+    python3 scripts/generate_models.py --check  # fail if they are not what the documents say
 
 The document is ``openapi/plugin-v1.json``: a copy of ``/plugin/v1/openapi.json``, which Korsi
 generates from the same models it validates with (``scripts/sync-openapi.sh`` refreshes it). The
@@ -18,11 +19,18 @@ typed. A page with ``items`` and ``next_cursor`` that takes a ``cursor`` also ge
 every item (``iter_cases()``). A route Korsi adds is in the SDK the moment the document is synced
 and this runs again -- nobody writes it by hand.
 
-The exceptions are the routes in :data:`HAND_WRITTEN`: the plane's first ones, which the clients
-wrap in something better than the raw call (``whoami()`` reads the caller into ids,
-``consume()`` takes an exact quantity, ``record()`` is ``None`` when there is none). The
-generator leaves those to the client and fails if one of them disappears from the document, or if
-a generated name would collide with something the client already has.
+The exceptions are the routes in :data:`HAND_WRITTEN`, which the clients wrap in something better
+than the raw call (``whoami()`` reads the caller into ids, ``consume()`` takes an exact quantity,
+``record()`` is ``None`` when there is none, ``complete()`` asks again with the same key,
+``file_text()`` can wait for a scan to be read, ``file_content()`` streams). The generator leaves
+those to the client and fails if one of them disappears from the document, or if a generated name
+would collide with something the client already has.
+
+**The manifest's types** (``manifest.py``, ``manifest.ts``) come from
+``openapi/korsi-plugin.schema.json``, Korsi's published schema of ``korsi-plugin.yaml``. The plugin
+writes a manifest, so a field is optional wherever the schema does not require it. Their names are
+the manifest's own and some are also plane names (``LocalizedText``), so they live in a module of
+their own.
 
 Standard library only, so it runs before anything is installed.
 """
@@ -40,6 +48,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCUMENT = ROOT / "openapi" / "plugin-v1.json"
+MANIFEST = ROOT / "openapi" / "korsi-plugin.schema.json"
 PYTHON_DIR = ROOT / "python" / "src" / "korsi_plugin"
 TS_DIR = ROOT / "packages" / "plugin" / "src"
 PREFIX = "/plugin/v1"
@@ -62,16 +71,27 @@ HAND_WRITTEN: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/wallet/holds/{hold_id}/release"): ("release_hold", "releaseHold"),
     ("POST", "/wallet/consume"): ("consume", "consume"),
     ("GET", "/events"): ("events", "events"),
+    # Plugin API 1.2.
+    ("POST", "/records/{type_key}/query"): ("query_records", "queryRecords"),
+    ("GET", "/files/{file_id}"): ("file", "file"),
+    ("GET", "/files/{file_id}/content"): ("file_content", "fileContent"),
+    ("GET", "/files/{file_id}/text"): ("file_text", "fileText"),
+    ("POST", "/calendar/free-slots"): ("free_slots", "freeSlots"),
+    ("POST", "/meetings"): ("host_meeting", "hostMeeting"),
+    ("GET", "/meetings/{meeting_id}/live/transcript"): ("live_transcript", "liveTranscript"),
+    ("GET", "/models"): ("models", "models"),
+    ("POST", "/models/complete"): ("complete", "complete"),
 }
 
 #: Everything else the clients have: a generated method may not take one of these names.
 RESERVED_PY = frozenset(
     {name for name, _ in HAND_WRITTEN.values()}
-    | {"iter_records", "iter_events", "reserve", "aclose", "api_base", "plugin_api", "_call"}
+    | {"iter_records", "iter_events", "iter_query_records", "iter_file_content", "reserve"}
+    | {"aclose", "api_base", "plugin_api", "_call", "_send"}
 )
 RESERVED_TS = frozenset(
     {name for _, name in HAND_WRITTEN.values()}
-    | {"iterRecords", "iterEvents", "reserve", "apiBase", "pluginApi", "call"}
+    | {"iterRecords", "iterEvents", "iterQueryRecords", "reserve", "apiBase", "pluginApi", "call"}
 )
 
 #: FastAPI's own validation envelope: Korsi answers problems instead, so neither is used.
@@ -169,10 +189,70 @@ def _py_type(schema: Schema) -> str:
     return "Any"
 
 
+def _python_types(
+    schemas: Mapping[str, Schema], *, sent: set[str], received: set[str]
+) -> list[str]:
+    """Each schema as a ``Literal`` or a ``TypedDict``; a field is required where Korsi always sends
+    it (a schema only ever received) or the schema requires it."""
+    lines: list[str] = []
+    for name in sorted(name for name, schema in schemas.items() if "enum" in schema):
+        values = ", ".join(json.dumps(value) for value in schemas[name]["enum"])
+        lines.append(f"{name} = Literal[{values}]")
+    # A field named like a keyword (``from``) cannot be written as a class: those dictionaries
+    # take the call form, after every class, so the names their fields name are all defined.
+    functional: list[str] = []
+    for name in sorted(schemas):
+        schema = schemas[name]
+        if name in SKIPPED or "enum" in schema:
+            continue
+        only_received = name in received and name not in sent
+        required = set(schema.get("required", []))
+        properties = schema.get("properties", {})
+        fields: list[tuple[str, str, str]] = []
+        for field, spec in properties.items():
+            kind = _py_type(spec)
+            if _is_decimal(spec) and "anyOf" not in spec:
+                kind = "str"
+            present = field in required or only_received
+            typed = kind if present else f"NotRequired[{kind}]"
+            fields.append((field, typed, _first_line(spec.get("description"))))
+        description = _first_line(schema.get("description"))
+        if any(keyword.iskeyword(field) or not field.isidentifier() for field, _, _ in fields):
+            functional.extend(["", ""])
+            if description:
+                functional.append(f"#: {description}")
+            functional.append(f"{name} = TypedDict(")
+            functional.append(f'    "{name}",')
+            functional.append("    {")
+            for field, kind, comment in fields:
+                if comment:
+                    functional.append(f"        #: {comment}")
+                functional.append(f'        "{field}": {kind},')
+            functional.append("    },")
+            functional.append(")")
+            continue
+        lines.extend(["", ""])
+        lines.append(f"class {name}(TypedDict):")
+        if description:
+            lines.append(f'    """{description}"""')
+            lines.append("")
+        if not properties:
+            lines.append("    pass")
+        for field, kind, comment in fields:
+            if comment:
+                lines.append(f"    #: {comment}")
+            lines.append(f"    {field}: {kind}")
+    lines.extend(functional)
+    return lines
+
+
+def _python_all(names: Iterable[str]) -> list[str]:
+    return ["", "__all__ = [", *(f'    "{name}",' for name in names), "]", ""]
+
+
 def python_module(document: Schema) -> str:
     schemas = document["components"]["schemas"]
-    _, received = _directions(document)
-    sent, _ = _directions(document)
+    sent, received = _directions(document)
     lines = [
         '"""The plugin plane\'s types, as Korsi\'s OpenAPI document gives them.',
         "",
@@ -193,41 +273,41 @@ def python_module(document: Schema) -> str:
         "Amount = str | float",
         "",
     ]
-    enums = sorted(name for name, schema in schemas.items() if "enum" in schema)
-    for name in enums:
-        values = ", ".join(json.dumps(value) for value in schemas[name]["enum"])
-        lines.append(f"{name} = Literal[{values}]")
-    for name in sorted(schemas):
-        schema = schemas[name]
-        if name in SKIPPED or "enum" in schema:
-            continue
-        only_received = name in received and name not in sent
-        required = set(schema.get("required", []))
-        lines.extend(["", ""])
-        lines.append(f"class {name}(TypedDict):")
-        description = _first_line(schema.get("description"))
-        if description:
-            lines.append(f'    """{description}"""')
-            lines.append("")
-        properties = schema.get("properties", {})
-        if not properties:
-            lines.append("    pass")
-        for field, spec in properties.items():
-            kind = _py_type(spec)
-            if _is_decimal(spec) and "anyOf" not in spec:
-                kind = "str"
-            present = field in required or only_received
-            comment = _first_line(spec.get("description"))
-            if comment:
-                lines.append(f"    #: {comment}")
-            lines.append(f"    {field}: {kind if present else f'NotRequired[{kind}]'}")
-    lines.append("")
-    names = sorted(name for name in schemas if name not in SKIPPED)
-    lines.append("__all__ = [")
-    for name in ["Amount", *names]:
-        lines.append(f'    "{name}",')
-    lines.append("]")
-    lines.append("")
+    lines += _python_types(schemas, sent=sent, received=received)
+    lines += _python_all(["Amount", *sorted(name for name in schemas if name not in SKIPPED)])
+    return "\n".join(lines)
+
+
+def _manifest_schemas(manifest: Schema) -> dict[str, Schema]:
+    """The manifest schema's definitions, and the manifest itself under its title."""
+    root = {key: value for key, value in manifest.items() if not key.startswith("$")}
+    return {**manifest.get("$defs", {}), manifest.get("title", "PluginManifest"): root}
+
+
+def python_manifest(manifest: Schema) -> str:
+    schemas = _manifest_schemas(manifest)
+    lines = [
+        '"""The manifest\'s types (``korsi-plugin.yaml``), as Korsi\'s published schema gives them.',
+        "",
+        "GENERATED by ``scripts/generate_models.py`` from ``openapi/korsi-plugin.schema.json``",
+        f"(``{manifest.get('$id', 'korsi.plugin/v1')}``).",
+        "Do not edit: change Korsi, export the schema again, generate again.",
+        "",
+        "A plugin writes its manifest, so a field the schema does not require is ``NotRequired``. Korsi",
+        "validates the rest of the rules (limits, cross-references, scopes) when the release is filed",
+        "and installed; ``uv run python -m korsi_api.tools.check_plugin_manifest`` checks a file by them.",
+        '"""',
+        "",
+        "from __future__ import annotations",
+        "",
+        "from typing import Any, Literal, NotRequired, TypedDict",
+        "",
+        "#: An amount: a decimal string, or a number.",
+        "Amount = str | float",
+        "",
+    ]
+    lines += _python_types(schemas, sent=set(schemas), received=set())
+    lines += _python_all(["Amount", *sorted(schemas)])
     return "\n".join(lines)
 
 
@@ -263,25 +343,11 @@ def _ts_type(schema: Schema) -> str:
     return "unknown"
 
 
-def ts_module(document: Schema) -> str:
-    schemas = document["components"]["schemas"]
-    sent, received = _directions(document)
-    lines = [
-        "/**",
-        " * The plugin plane's types, as Korsi's OpenAPI document gives them.",
-        " *",
-        " * GENERATED by `scripts/generate_models.py` from `openapi/plugin-v1.json` "
-        f"(plugin API {document['info']['version']}).",
-        " * Do not edit: change Korsi, refresh the document, generate again.",
-        " *",
-        " * Ids and times are strings, as they are on the wire; amounts of MU are decimal strings",
-        " * (`Amount` also accepts a number on the way in).",
-        " */",
-        "",
-        "/** An amount: Korsi sends a decimal string, and accepts a string or a number. */",
-        "export type Amount = string | number;",
-        "",
-    ]
+def _ts_types(
+    schemas: Mapping[str, Schema], *, sent: set[str], received: set[str]
+) -> list[str]:
+    """Each schema as a union of literals or an interface, by the same rule as Python's."""
+    lines: list[str] = []
     for name in sorted(name for name, schema in schemas.items() if "enum" in schema):
         values = " | ".join(json.dumps(value) for value in schemas[name]["enum"])
         lines.append(f"export type {name} = {values};")
@@ -307,6 +373,52 @@ def ts_module(document: Schema) -> str:
             lines.append(f"  {field}{'' if present else '?'}: {kind};")
         lines.append("}")
     lines.append("")
+    return lines
+
+
+def ts_module(document: Schema) -> str:
+    schemas = document["components"]["schemas"]
+    sent, received = _directions(document)
+    lines = [
+        "/**",
+        " * The plugin plane's types, as Korsi's OpenAPI document gives them.",
+        " *",
+        " * GENERATED by `scripts/generate_models.py` from `openapi/plugin-v1.json` "
+        f"(plugin API {document['info']['version']}).",
+        " * Do not edit: change Korsi, refresh the document, generate again.",
+        " *",
+        " * Ids and times are strings, as they are on the wire; amounts of MU are decimal strings",
+        " * (`Amount` also accepts a number on the way in).",
+        " */",
+        "",
+        "/** An amount: Korsi sends a decimal string, and accepts a string or a number. */",
+        "export type Amount = string | number;",
+        "",
+    ]
+    lines += _ts_types(schemas, sent=sent, received=received)
+    return "\n".join(lines)
+
+
+def ts_manifest(manifest: Schema) -> str:
+    schemas = _manifest_schemas(manifest)
+    lines = [
+        "/**",
+        " * The manifest's types (`korsi-plugin.yaml`), as Korsi's published schema gives them.",
+        " *",
+        " * GENERATED by `scripts/generate_models.py` from `openapi/korsi-plugin.schema.json`",
+        f" * (`{manifest.get('$id', 'korsi.plugin/v1')}`).",
+        " * Do not edit: change Korsi, export the schema again, generate again.",
+        " *",
+        " * A plugin writes its manifest, so a field the schema does not require is optional. Korsi",
+        " * validates the rest of the rules (limits, cross-references, scopes) when the release is filed",
+        " * and installed. Exported as the namespace `Manifest`: some names are also the plane's.",
+        " */",
+        "",
+        "/** An amount: a decimal string, or a number. */",
+        "export type Amount = string | number;",
+        "",
+    ]
+    lines += _ts_types(schemas, sent=set(schemas), received=set())
     return "\n".join(lines)
 
 
@@ -695,16 +807,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--check", action="store_true", help="fail if a generated file is stale")
     parser.add_argument("--document", type=Path, default=DOCUMENT, help="another document")
+    parser.add_argument("--manifest", type=Path, default=MANIFEST, help="another manifest schema")
     parser.add_argument("--python-out", type=Path, default=PYTHON_DIR, help="another directory")
     parser.add_argument("--ts-out", type=Path, default=TS_DIR, help="another directory")
     args = parser.parse_args(argv)
     document = json.loads(args.document.read_text(encoding="utf-8"))
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     try:
         outputs = {
             args.python_out / "models.py": python_module(document),
             args.python_out / "operations.py": python_operations(document),
+            args.python_out / "manifest.py": python_manifest(manifest),
             args.ts_out / "models.ts": ts_module(document),
             args.ts_out / "operations.ts": ts_operations(document),
+            args.ts_out / "manifest.ts": ts_manifest(manifest),
         }
     except GenerationError as error:
         print(f"cannot generate: {error}", file=sys.stderr)

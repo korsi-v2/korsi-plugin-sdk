@@ -1,4 +1,6 @@
-# Generated from openapi/plugin-v1.json by scripts/generate_models.py.
+# Generated from openapi/plugin-v1.json and openapi/korsi-plugin.schema.json by
+# scripts/generate_models.py.
 packages/plugin/src/models.ts
 packages/plugin/src/operations.ts
+packages/plugin/src/manifest.ts
 packages/plugin/test/.generated/

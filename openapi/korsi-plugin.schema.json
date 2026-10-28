@@ -1,0 +1,1241 @@
+{
+  "$defs": {
+    "AppSpec": {
+      "additionalProperties": false,
+      "description": "The plugin's own app, opened inside Korsi's shell (decision 10).",
+      "properties": {
+        "entry": {
+          "default": "/",
+          "title": "Entry",
+          "type": "string"
+        },
+        "tabs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TabSpec"
+          },
+          "maxItems": 8,
+          "title": "Tabs",
+          "type": "array"
+        }
+      },
+      "title": "AppSpec",
+      "type": "object"
+    },
+    "ConnectionCapability": {
+      "description": "What a connection brings into Korsi, which Korsi then does itself (ADR-0067).\n\nThe plugin speaks the other system's language and nothing else: Korsi asks it for changes and\napplies them, as the person who connected, in its own jobs.",
+      "enum": [
+        "mail",
+        "calendar",
+        "calendar_attendees"
+      ],
+      "title": "ConnectionCapability",
+      "type": "string"
+    },
+    "ConnectionFieldKind": {
+      "description": "How a connection field is asked for. ``password`` is always secret.",
+      "enum": [
+        "text",
+        "email",
+        "url",
+        "number",
+        "boolean",
+        "password"
+      ],
+      "title": "ConnectionFieldKind",
+      "type": "string"
+    },
+    "ConnectionFieldSpec": {
+      "additionalProperties": false,
+      "description": "One thing a person gives when connecting: their address, their password, a time window.\n\nSecret fields are sealed by Korsi and handed to the plugin only on a call; they never return to\na browser, not even to the person who typed them. The rest are kept in the clear, shown on the\nconnection, and editable without reconnecting.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "$ref": "#/$defs/ConnectionFieldKind",
+          "default": "text"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "secret": {
+          "default": false,
+          "title": "Secret",
+          "type": "boolean"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "names"
+      ],
+      "title": "ConnectionFieldSpec",
+      "type": "object"
+    },
+    "ConnectionSpec": {
+      "additionalProperties": false,
+      "description": "An account a person connects through this plugin, or their standing consent (ADR-0067).\n\n**Korsi keeps the connection, not the plugin.** It seals the secret fields, calls the plugin\nwith them when it is time to sync or to act on the calendar, and applies what comes back as the\nperson who connected. A plugin Korsi runs keeps nothing between calls.\n\n**A connection without fields is a consent.** \"Work on my mail for me\": the person turns it on,\nand the plugin may then act for them, in the background, within ``scopes`` -- and only there.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fields": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConnectionFieldSpec"
+          },
+          "maxItems": 12,
+          "title": "Fields",
+          "type": "array"
+        },
+        "provides": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConnectionCapability"
+          },
+          "maxItems": 3,
+          "title": "Provides",
+          "type": "array"
+        },
+        "scopes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginScope"
+          },
+          "maxItems": 20,
+          "title": "Scopes",
+          "type": "array"
+        },
+        "sync_minutes": {
+          "default": 10,
+          "maximum": 1440,
+          "minimum": 5,
+          "title": "Sync Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "names"
+      ],
+      "title": "ConnectionSpec",
+      "type": "object"
+    },
+    "DataEgress": {
+      "description": "Where the publisher says the organization's data goes. Declared, shown, and -- only for\n``instance`` placement -- enforced.",
+      "enum": [
+        "none",
+        "publisher",
+        "third_party"
+      ],
+      "title": "DataEgress",
+      "type": "string"
+    },
+    "DataHandling": {
+      "additionalProperties": false,
+      "properties": {
+        "egress": {
+          "$ref": "#/$defs/DataEgress",
+          "default": "none"
+        },
+        "stores": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Stores",
+          "type": "array"
+        },
+        "retention_days": {
+          "anyOf": [
+            {
+              "maximum": 3650,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retention Days"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        }
+      },
+      "title": "DataHandling",
+      "type": "object"
+    },
+    "ExtensionPoint": {
+      "description": "Where in Korsi's own pages a plugin may show a panel (section 15).",
+      "enum": [
+        "record.panel",
+        "desk.widget",
+        "meeting.live.panel"
+      ],
+      "title": "ExtensionPoint",
+      "type": "string"
+    },
+    "FieldSpec": {
+      "additionalProperties": false,
+      "description": "A top-level property of a record type that Korsi keeps beside the record to filter and\norder by (ADR-0085). Checked against the type's schema when the manifest is read.\n\nA keyword's property bounds its length: a ``maxLength`` of at most 500, or an ``enum`` of\nstrings no longer than that.",
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/RecordFieldKind"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "title": "FieldSpec",
+      "type": "object"
+    },
+    "LocalizedText": {
+      "additionalProperties": false,
+      "description": "A name or a sentence in the languages Korsi ships. At least one is required.\n\nPersian first, because it is the default language of the product; any one is accepted so a\npublisher writing in one language is not refused, and the store falls back through\n:meth:`pick`.",
+      "properties": {
+        "fa": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fa"
+        },
+        "en": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "En"
+        },
+        "ar": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ar"
+        }
+      },
+      "title": "LocalizedText",
+      "type": "object"
+    },
+    "PanelRecord": {
+      "description": "Which record page a ``record.panel`` sits on.",
+      "enum": [
+        "case",
+        "meeting",
+        "document"
+      ],
+      "title": "PanelRecord",
+      "type": "string"
+    },
+    "PanelSpec": {
+      "additionalProperties": false,
+      "description": "A panel in one of Korsi's pages, loaded only when a person opens it (decision 19).",
+      "properties": {
+        "point": {
+          "$ref": "#/$defs/ExtensionPoint"
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entry": {
+          "title": "Entry",
+          "type": "string"
+        },
+        "names": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "permission": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Permission"
+        }
+      },
+      "required": [
+        "point",
+        "entry"
+      ],
+      "title": "PanelSpec",
+      "type": "object"
+    },
+    "PermissionLevel": {
+      "description": "How deep one of a plugin's own permissions reaches: the access page's three depths, which it\nis listed under beside Korsi's own (ADR-0082).",
+      "enum": [
+        "view",
+        "work",
+        "manage"
+      ],
+      "title": "PermissionLevel",
+      "type": "string"
+    },
+    "PermissionSpec": {
+      "additionalProperties": false,
+      "description": "One of the plugin's own permission levels (ADR-0082): who may do what *inside* the plugin.\n\nThe organization gives it to roles on Korsi's access page, never to one person, and Korsi tells\nthe plugin which of them the person in front of it holds. It never widens what the plugin may\ndo in Korsi -- scopes stay the ceiling there. Korsi itself enforces it where it shows or serves\nsomething of the plugin's: a record type's ``read_permission``, and the ``permission`` of a\ntool, a tab or a panel.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "level": {
+          "$ref": "#/$defs/PermissionLevel"
+        },
+        "default_roles": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Default Roles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "names",
+        "level"
+      ],
+      "title": "PermissionSpec",
+      "type": "object"
+    },
+    "Placement": {
+      "description": "Where a plugin's code runs (section 17).",
+      "enum": [
+        "external",
+        "instance",
+        "none"
+      ],
+      "title": "Placement",
+      "type": "string"
+    },
+    "PlanPeriod": {
+      "enum": [
+        "monthly",
+        "yearly",
+        "once"
+      ],
+      "title": "PlanPeriod",
+      "type": "string"
+    },
+    "PlanSpec": {
+      "additionalProperties": false,
+      "description": "A plan the plugin sells: an amount of MU and what each service costs from it.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "period": {
+          "$ref": "#/$defs/PlanPeriod"
+        },
+        "mu": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+              "type": "string"
+            }
+          ],
+          "title": "Mu"
+        },
+        "rates": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Rates",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "names",
+        "period",
+        "mu"
+      ],
+      "title": "PlanSpec",
+      "type": "object"
+    },
+    "PluginScope": {
+      "description": "Every scope a manifest may name. Renaming one is a breaking change to the plugin contract.",
+      "enum": [
+        "people.read",
+        "structure.read",
+        "cases.read",
+        "actions.read",
+        "decisions.read",
+        "meetings.read",
+        "meetings.transcript.read",
+        "documents.read",
+        "documents.text.read",
+        "files.read",
+        "calendar.read",
+        "memory.search",
+        "records.own",
+        "proposals.action",
+        "proposals.case",
+        "proposals.decision",
+        "proposals.calendar",
+        "proposals.memory",
+        "sources.intake.message",
+        "sources.intake.document",
+        "sources.read.message",
+        "wallet.consume",
+        "records.confidential",
+        "models.use",
+        "meetings.host",
+        "meetings.live.read",
+        "korsyar.specialist"
+      ],
+      "title": "PluginScope",
+      "type": "string"
+    },
+    "PluginType": {
+      "description": "What a plugin mainly is. Its type decides how deep a review it gets, not what it may do.",
+      "enum": [
+        "intake_connector",
+        "integration",
+        "insight_module",
+        "tool_module",
+        "app_module",
+        "knowledge_pack"
+      ],
+      "title": "PluginType",
+      "type": "string"
+    },
+    "ProposalType": {
+      "description": "What a plugin may propose into Korsi's own records (section 11).",
+      "enum": [
+        "action.create",
+        "case.change",
+        "decision.candidate",
+        "calendar.event.create",
+        "memory.finding",
+        "case.create",
+        "case.stage.move"
+      ],
+      "title": "ProposalType",
+      "type": "string"
+    },
+    "RecordFieldKind": {
+      "description": "What a record field Korsi filters on holds (ADR-0085), and the schema type it must have.",
+      "enum": [
+        "keyword",
+        "number",
+        "date",
+        "bool"
+      ],
+      "title": "RecordFieldKind",
+      "type": "string"
+    },
+    "RecordTypeSpec": {
+      "additionalProperties": false,
+      "description": "A record type the plugin keeps in Korsi (section 10).",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "visibility": {
+          "$ref": "#/$defs/RecordVisibility"
+        },
+        "title_field": {
+          "default": "title",
+          "maxLength": 64,
+          "title": "Title Field",
+          "type": "string"
+        },
+        "schema": {
+          "additionalProperties": true,
+          "title": "Schema",
+          "type": "object"
+        },
+        "fields": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "maxItems": 8,
+          "title": "Fields",
+          "type": "array"
+        },
+        "read_permission": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Read Permission"
+        }
+      },
+      "required": [
+        "key",
+        "names",
+        "visibility",
+        "schema"
+      ],
+      "title": "RecordTypeSpec",
+      "type": "object"
+    },
+    "RecordVisibility": {
+      "description": "Who sees a plugin's record of a given type (decision 17).",
+      "enum": [
+        "organization",
+        "case",
+        "personal",
+        "case_members"
+      ],
+      "title": "RecordVisibility",
+      "type": "string"
+    },
+    "RuntimeSpec": {
+      "additionalProperties": false,
+      "description": "Where the plugin's code runs, and how Korsi reaches it (section 17).\n\n``external``: the publisher names ``base_url``, its own server, and review approves it.\n``instance``: the publisher names an image by digest and the port it listens on; Korsi runs it\nbeside the instance and gives each installation its own address, so the manifest has no\n``base_url`` -- the address is the installation's, not the plugin's.",
+      "properties": {
+        "placement": {
+          "$ref": "#/$defs/Placement"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Port"
+        },
+        "egress": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Egress",
+          "type": "array"
+        },
+        "secrets": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Secrets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "placement"
+      ],
+      "title": "RuntimeSpec",
+      "type": "object"
+    },
+    "ScopeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginScope"
+          },
+          "title": "Required",
+          "type": "array"
+        },
+        "optional": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginScope"
+          },
+          "title": "Optional",
+          "type": "array"
+        }
+      },
+      "title": "ScopeRequest",
+      "type": "object"
+    },
+    "ServiceSpec": {
+      "additionalProperties": false,
+      "description": "A unit the plugin charges for, such as \"one email read\".",
+      "properties": {
+        "key": {
+          "pattern": "^[a-z][a-z0-9_.]{0,63}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      },
+      "required": [
+        "key",
+        "names"
+      ],
+      "title": "ServiceSpec",
+      "type": "object"
+    },
+    "SlotSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "provides": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Provides",
+          "type": "array"
+        }
+      },
+      "title": "SlotSpec",
+      "type": "object"
+    },
+    "SpecialistInstructions": {
+      "additionalProperties": false,
+      "description": "A specialist's instructions, in the languages Korsi ships; at least one. Longer than a\nname or a sentence, which is all :class:`LocalizedText` holds.",
+      "properties": {
+        "fa": {
+          "anyOf": [
+            {
+              "maxLength": 16000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fa"
+        },
+        "en": {
+          "anyOf": [
+            {
+              "maxLength": 16000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "En"
+        },
+        "ar": {
+          "anyOf": [
+            {
+              "maxLength": 16000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ar"
+        }
+      },
+      "title": "SpecialistInstructions",
+      "type": "object"
+    },
+    "SpecialistSpec": {
+      "additionalProperties": false,
+      "description": "A specialist the plugin brings, which works behind Korsyar (ADR-0080).\n\n**Korsi runs it, not the plugin.** It is an agent on Korsi's own runtime, under Korsi's fixed\npreamble, and Korsyar asks it as ``plugin:<installation>:<work>`` beside its own specialists.\nIt reaches the plugin only through Korsi, with the sealed handle of the person in the\nconversation, and only through the tools it names: a read tool answers, an action tool\nprepares a card the person confirms. Only a ``trusted`` release may bring one\n(``korsyar.specialist``), and Korsi's review reads its instructions like the rest of the\nrelease.",
+      "properties": {
+        "work": {
+          "pattern": "^[a-z][a-z0-9_]{1,23}$",
+          "title": "Work",
+          "type": "string"
+        },
+        "names": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "hand_off_when": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "instructions": {
+          "$ref": "#/$defs/SpecialistInstructions"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Tools",
+          "type": "array"
+        },
+        "permission": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Permission"
+        }
+      },
+      "required": [
+        "work",
+        "hand_off_when",
+        "instructions"
+      ],
+      "title": "SpecialistSpec",
+      "type": "object"
+    },
+    "SupportSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "contact": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contact"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "SupportSpec",
+      "type": "object"
+    },
+    "TabSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "permission": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Permission"
+        }
+      },
+      "required": [
+        "key",
+        "names",
+        "path"
+      ],
+      "title": "TabSpec",
+      "type": "object"
+    },
+    "ToolKind": {
+      "description": "What calling one of a plugin's tools does (ADR-0080).",
+      "enum": [
+        "read",
+        "action"
+      ],
+      "title": "ToolKind",
+      "type": "string"
+    },
+    "ToolSpec": {
+      "additionalProperties": false,
+      "description": "A tool the plugin offers Korsyar, through Korsi (decision 14).\n\nA ``read`` tool -- every tool before 1.2 -- answers and changes nothing. An ``action`` tool\nchanges the plugin's own records, and only the plugin's specialist may use it: using it\nprepares a card, and Korsi calls the plugin with the card's arguments only once the person\nconfirms it (ADR-0080).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "input_schema": {
+          "additionalProperties": true,
+          "title": "Input Schema",
+          "type": "object"
+        },
+        "permission": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Permission"
+        },
+        "kind": {
+          "$ref": "#/$defs/ToolKind",
+          "default": "read"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "title": "ToolSpec",
+      "type": "object"
+    },
+    "UiSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "panels": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PanelSpec"
+          },
+          "maxItems": 10,
+          "title": "Panels",
+          "type": "array"
+        }
+      },
+      "title": "UiSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``korsi-plugin.yaml``: everything a plugin is allowed to be.",
+  "properties": {
+    "schema": {
+      "default": "korsi.plugin/v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 128,
+      "title": "Id",
+      "type": "string"
+    },
+    "publisher": {
+      "title": "Publisher",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "plugin_api": {
+      "default": ">=1.0,<2.0",
+      "maxLength": 40,
+      "title": "Plugin Api",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/PluginType"
+    },
+    "names": {
+      "$ref": "#/$defs/LocalizedText"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "icon": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Icon"
+    },
+    "hue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hue"
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeSpec"
+    },
+    "data_handling": {
+      "$ref": "#/$defs/DataHandling"
+    },
+    "scopes": {
+      "$ref": "#/$defs/ScopeRequest"
+    },
+    "record_types": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RecordTypeSpec"
+      },
+      "maxItems": 20,
+      "title": "Record Types",
+      "type": "array"
+    },
+    "permissions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PermissionSpec"
+      },
+      "maxItems": 30,
+      "title": "Permissions",
+      "type": "array"
+    },
+    "proposals": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ProposalType"
+      },
+      "title": "Proposals",
+      "type": "array"
+    },
+    "intake": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 2,
+      "title": "Intake",
+      "type": "array"
+    },
+    "events": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Events",
+      "type": "array"
+    },
+    "tools": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ToolSpec"
+      },
+      "maxItems": 30,
+      "title": "Tools",
+      "type": "array"
+    },
+    "specialists": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SpecialistSpec"
+      },
+      "maxItems": 3,
+      "title": "Specialists",
+      "type": "array"
+    },
+    "ui": {
+      "$ref": "#/$defs/UiSpec"
+    },
+    "settings_schema": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Settings Schema"
+    },
+    "connections": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ConnectionSpec"
+      },
+      "maxItems": 4,
+      "title": "Connections",
+      "type": "array"
+    },
+    "services": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ServiceSpec"
+      },
+      "maxItems": 30,
+      "title": "Services",
+      "type": "array"
+    },
+    "plans": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PlanSpec"
+      },
+      "maxItems": 10,
+      "title": "Plans",
+      "type": "array"
+    },
+    "slots": {
+      "$ref": "#/$defs/SlotSpec"
+    },
+    "support": {
+      "$ref": "#/$defs/SupportSpec"
+    }
+  },
+  "required": [
+    "id",
+    "publisher",
+    "version",
+    "type",
+    "names",
+    "runtime"
+  ],
+  "title": "PluginManifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://korsi.ai/schemas/korsi.plugin/v1.json"
+}

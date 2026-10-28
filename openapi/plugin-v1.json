@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Korsi plugin API",
-    "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's four budgets -- reads,\nwrites, sources, proposals (:mod:`.limits`) -- before it opens a session, and past one it is\nanswered ``429`` with ``Retry-After``.\n",
-    "version": "1.1"
+    "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's five budgets -- reads,\nwrites, sources, proposals, models (:mod:`.limits`) -- before it opens a session, and past one it\nis answered ``429`` with ``Retry-After``.\n",
+    "version": "1.2"
   },
   "paths": {
     "/plugin/v1/installation": {
@@ -113,6 +113,25 @@
               ],
               "title": "Case Id"
             }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the title.",
+              "title": "Query"
+            },
+            "description": "Words in the title."
           },
           {
             "name": "cursor",
@@ -1985,6 +2004,97 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "plugin",
+          "plugin: meetings"
+        ],
+        "summary": "Host a meeting for the person in front of me",
+        "description": "Needs `meetings.host`, a trusted scope, and a person's handle: that person creates the meeting and must be able to open `case_id`. The same `external_id` answers the meeting already made, with `200` instead of `201`. Its attendees are `participant_user_ids` (the person creating it too, when named) and `guests`, people with no account named by `name` alone: a guest sees nothing and grants nothing. The room is Korsi's own page -- open it with the Bridge's `korsi:show` -- and so is the consent card it draws before recording when `recording.consent` is `required`. Audio and words are deleted after `audio_days` and `transcript_days`, capped by the organization's own ceiling.",
+        "operationId": "host_meeting_plugin_v1_meetings_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostMeeting"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "request.invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/plugin/v1/meetings/{meeting_id}": {
@@ -2621,6 +2731,800 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/records/{type_key}/query": {
+      "post": {
+        "tags": [
+          "plugin",
+          "plugin: records"
+        ],
+        "summary": "My records of a type, by their fields",
+        "description": "Up to five conditions on the fields the type declares (`eq`, `in`, `gt`, `gte`, `lt`, `lte`, `prefix`, `exists`), all of which must hold, words in the title, and the case they are filed under. Ordered by a declared field -- records with no value for it last -- or by `updated_at`, newest first when `order_by` is left out; the cursor belongs to that order. Read through the same visibility as the list: on a person's behalf, only what that person may see. A field the type does not declare, or a comparison its kind cannot take, is `422 plugin.record_field_unknown`.",
+        "operationId": "query_records_plugin_v1_records__type_key__query_post",
+        "parameters": [
+          {
+            "name": "type_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 48,
+              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+              "title": "Type Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRecords"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "request.invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/files/{file_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: files"
+        ],
+        "summary": "A file a person handed me",
+        "description": "Needs `files.read`. A file the person picked for this installation in Korsi's file picker (the Bridge's `pickFile`), read on their behalf or by the installation itself. Any other file is `404 plugin.file_not_granted`.",
+        "operationId": "get_file_plugin_v1_files__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginFile"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "resource.conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/files/{file_id}/content": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: files"
+        ],
+        "summary": "The bytes of a file a person handed me",
+        "description": "Needs `files.read`. The bytes as the person gave them, streamed, always as an attachment. `media_type` is what Korsi read them as -- for showing, never for trusting.",
+        "operationId": "get_file_content_plugin_v1_files__file_id__content_get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file, as given.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "resource.conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/files/{file_id}/text": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: files"
+        ],
+        "summary": "The text of a file a person handed me",
+        "description": "Needs `files.read`. Read by Korsi from the file itself: plain text, Word, Excel, OpenDocument sheets, PowerPoint and a PDF's own text layer (`extraction: local`). A scan -- a PDF or a picture with no text of its own -- is read by OCR, a paid service only with `models.use`, billed to the publisher as `plugin.ocr`: the first ask queues it and answers `409 plugin.text_pending` (`retry_after_seconds` in its params), and once read every ask answers its text (`extraction: ocr`) at no further cost. `402 plugin.publisher_funds` while the publisher's paid services are paused. Otherwise `409 plugin.text_unavailable`, its `reason` saying why: `scan` (a scan, and no `models.use`), `ocr_unavailable` (this instance offers no OCR), `archive` (Korsi opens none: pick the files inside instead), `kind` (no text in it), `too_large` (past 25 MB, a zip that unpacks past what Korsi reads, a PDF past 500 pages, or more than a million characters of text) or `unreadable` (Korsi could not parse it, or OCR found no text in it).",
+        "operationId": "get_file_text_plugin_v1_files__file_id__text_get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginFileText"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "resource.conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/calendar/free-slots": {
+      "post": {
+        "tags": [
+          "plugin",
+          "plugin: calendar"
+        ],
+        "summary": "When these people are all free",
+        "description": "Needs `calendar.read`, on a person's behalf only (`403 plugin.personal_needs_person` for the plugin acting as itself). Free times of `duration_minutes` when every one of `user_ids` -- active members, at most 20 -- is free, from `from` to `to` (both included, at most 31 days), inside the organization's working hours unless `within_hours` is false, and never on its days off or in the past. Times only: nothing about what anybody is doing. Nothing is booked.",
+        "operationId": "find_free_slots_plugin_v1_calendar_free_slots_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindFreeSlots"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreeSlotPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "request.invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/meetings/{meeting_id}/live/transcript": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: meetings"
+        ],
+        "summary": "What is being said in a meeting I host",
+        "description": "Needs `meetings.live.read`, a trusted scope. Only for a meeting this installation hosts, as itself or for a person who may see it: any other is `404 plugin.meeting_not_hosted`, and a restricted meeting another installation hosts is not found at all. Poll it: pass `covered_through` back as `since` for what came after. A preview, not the record -- the transcript read from the recording is, announced by `meeting.transcript_ready`.",
+        "operationId": "live_transcript_plugin_v1_meetings__meeting_id__live_transcript_get",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveTranscript"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/models": {
+      "get": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "The language models Korsi lends me, and their price",
+        "operationId": "list_models_plugin_v1_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginModelPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "provider.unreachable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/models/complete": {
+      "post": {
+        "tags": [
+          "plugin"
+        ],
+        "summary": "One answer from one of Korsi's models, at my publisher's cost",
+        "operationId": "complete_plugin_v1_models_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCompletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelCompletion"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "request.invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "provider.unreachable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "service.unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -3528,6 +4432,17 @@
             ],
             "title": "Stage Name"
           },
+          "stage_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Key"
+          },
           "counterparty_entity_id": {
             "anyOf": [
               {
@@ -3584,6 +4499,29 @@
             "type": "integer",
             "title": "Open Blocker Count",
             "default": 0
+          },
+          "origin_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Plugin Id"
+          },
+          "origin_installation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Installation Id"
           },
           "created_at": {
             "type": "string",
@@ -3745,6 +4683,14 @@
             "type": "array",
             "title": "Links",
             "default": []
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/CaseStage"
+            },
+            "type": "array",
+            "title": "Stages",
+            "default": []
           }
         },
         "type": "object",
@@ -3855,6 +4801,17 @@
             ],
             "title": "Stage Name"
           },
+          "stage_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Key"
+          },
           "counterparty_entity_id": {
             "anyOf": [
               {
@@ -3911,6 +4868,29 @@
             "type": "integer",
             "title": "Open Blocker Count",
             "default": 0
+          },
+          "origin_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Plugin Id"
+          },
+          "origin_installation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Installation Id"
           },
           "created_at": {
             "type": "string",
@@ -4216,6 +5196,35 @@
         "title": "CasePriority",
         "description": "How much the outcome matters.\n\nDistinct from attention: a normal-priority case that nobody has touched for two months\nneeds attention, and a critical one that was reviewed yesterday does not."
       },
+      "CaseStage": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "current": {
+            "type": "boolean",
+            "title": "Current",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "position"
+        ],
+        "title": "CaseStage",
+        "description": "One stage of the case's process, in order (ADR-0084).\n\n``key`` is what a ``case.stage.move`` names and ``operation.case.stage_moved`` reports: for a\ncase a plugin's ``case.create`` opened without a template, the key that plugin gave the stage,\nand a key Korsi gave a stage the plugin brought without one or a person added. ``name`` is the\norganization's, as ``stage_name`` is. ``position`` is 1-based; ``current`` marks the stage the\ncase is in, the one ``stage_key`` names, and no stage once the case has none."
+      },
       "CaseStatusUpdate": {
         "properties": {
           "id": {
@@ -4361,6 +5370,24 @@
         ],
         "title": "Colleague",
         "description": "One person in this tenant, as a picker or a label needs them.\n\nThe shape every \"who is this\" question in the product resolves to. It exists because four\ndomains were each building it from ``app_user`` joined to ``tenant_member``, and a fifth was\nabout to: an owner picker in Operations, a voice picker in Meetings, an allocation picker in\nCommerce, and actor labels in analysis views. Four copies of one query is four chances to\nforget the status filter, and one of them had.\n\n``label`` is resolved server-side rather than sent as a name plus an email for the client to\nchoose between. Which one to show is one decision -- display name, or the address when nobody\nhas set one -- and making it here is what stops two screens showing the same person\ndifferently.\n\n``status`` is carried rather than filtered out, because the two questions this answers want\nopposite things. A picker offers only active members: a removed colleague must not be\nassignable. A label must resolve for anybody, including somebody who has left, or a case they\nused to own loses its history the day their account closes."
+      },
+      "CompletionUsage": {
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_tokens",
+          "output_tokens"
+        ],
+        "title": "CompletionUsage"
       },
       "Consume": {
         "properties": {
@@ -5340,6 +6367,122 @@
         "title": "FieldError",
         "description": "One field-level validation failure."
       },
+      "FieldOperator": {
+        "type": "string",
+        "enum": [
+          "eq",
+          "in",
+          "gt",
+          "gte",
+          "lt",
+          "lte",
+          "prefix",
+          "exists"
+        ],
+        "title": "FieldOperator",
+        "description": "How one condition of a record query compares a field (ADR-0085)."
+      },
+      "FindFreeSlots": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "User Ids"
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "maximum": 480.0,
+            "minimum": 5.0,
+            "title": "Duration Minutes"
+          },
+          "within_hours": {
+            "type": "boolean",
+            "title": "Within Hours",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_ids",
+          "from",
+          "to",
+          "duration_minutes"
+        ],
+        "title": "FindFreeSlots",
+        "description": "``POST /plugin/v1/calendar/free-slots``: times when every one of these people is free.\n\nOnly on a person's handle, under ``calendar.read``. The answer is times, never what fills\nanybody's day, and asking books nothing. The days are the organization's, in its time zone;\nits days off are left out."
+      },
+      "FreeSlot": {
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "outside_hours": {
+            "type": "boolean",
+            "title": "Outside Hours",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "FreeSlot"
+      },
+      "FreeSlotPage": {
+        "properties": {
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/FreeSlot"
+            },
+            "type": "array",
+            "title": "Slots",
+            "default": []
+          },
+          "days_searched": {
+            "type": "integer",
+            "title": "Days Searched"
+          },
+          "days_off": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Days Off",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "days_searched"
+        ],
+        "title": "FreeSlotPage",
+        "description": "The free times found, spread over the days searched."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5414,6 +6557,133 @@
           "expires_at"
         ],
         "title": "HoldView"
+      },
+      "HostMeeting": {
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "External Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "participant_user_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Participant User Ids",
+            "default": []
+          },
+          "guests": {
+            "items": {
+              "$ref": "#/components/schemas/HostedGuest"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Guests",
+            "default": []
+          },
+          "restricted": {
+            "type": "boolean",
+            "title": "Restricted",
+            "default": false
+          },
+          "recording": {
+            "$ref": "#/components/schemas/HostedRecording"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_id",
+          "title"
+        ],
+        "title": "HostMeeting",
+        "description": "``POST /plugin/v1/meetings``: a meeting the plugin hosts, created by the person in front of\nit (``meetings.host``, a trusted scope, ADR-0083).\n\nOnly on a person's handle: that person creates it, and must be able to open ``case_id`` to file\nit there. It is held in Korsi's own room, which the plugin's page opens with the Bridge's\n``korsi:show``. The same ``external_id`` from the same installation answers the meeting already\nmade. The answer is the meeting as ``GET /meetings/{id}`` shows it.\n\nWho is expected is its attendees, as on Korsi's own meeting form: the participants by id, then\nthe guests by name."
+      },
+      "HostedGuest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "HostedGuest",
+        "description": "Somebody expected at a hosted meeting who is not a member -- an interview's candidate.\n\nA name and nothing else. It is written on the meeting as an attendee known by name alone\n(ADR-0027), the way Korsi's own form writes a name typed for somebody without an account. It\ngrants nothing: a restricted meeting is still read only by its member participants, the people\nof its case and its host. There is no email and no phone, because Korsi invites nobody from it\nand the plugin keeps the person's data."
+      },
+      "HostedRecording": {
+        "properties": {
+          "consent": {
+            "$ref": "#/components/schemas/RecordingConsent",
+            "default": "required"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LocalizedText"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Lines",
+            "default": []
+          },
+          "audio_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 365.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Days"
+          },
+          "transcript_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 365.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcript Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HostedRecording",
+        "description": "How a hosted meeting is recorded, and how long Korsi keeps what it records.\n\nThe days are counted from the meeting's end. The organization's own retention ceiling caps\nthem, and the consent card shows the smaller. Left out, the audio or the words are kept as any\nmeeting's are."
       },
       "ImpactLevel": {
         "type": "string",
@@ -5523,6 +6793,133 @@
         ],
         "title": "IntakeSource",
         "description": "A message or a document a plugin brings in. It waits for a person's review (ADR-0006)."
+      },
+      "JsonSchemaFormat": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "title": "Name"
+          },
+          "schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Schema"
+          },
+          "strict": {
+            "type": "boolean",
+            "title": "Strict",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "schema"
+        ],
+        "title": "JsonSchemaFormat",
+        "description": "The schema a ``json_schema`` answer must match, in the shape the model providers take."
+      },
+      "LiveSegment": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "speaker": {
+            "type": "string",
+            "title": "Speaker"
+          },
+          "speaker_key": {
+            "type": "string",
+            "title": "Speaker Key"
+          },
+          "speaker_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker User Id"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "speaker",
+          "speaker_key",
+          "at"
+        ],
+        "title": "LiveSegment",
+        "description": "One stretch of speech heard while the meeting is held: a preview, not the record. The\ntranscript made from the recording afterwards is the record (``meeting.transcript_ready``).\n\n**Shaped as the Bridge's line, not as Korsi's room's.** The room's own segment carries the\nengine's label, the track it came from and offsets measured per track, and the room names\nvoices from its roster beside it; a plugin has no roster to read, so the line comes named, as\nthe room shows it, and as ``korsi:meeting.live`` pushes it to the plugin's panel. The offsets\nand tracks stay behind: they cannot be compared across participants, and ``at`` orders."
+      },
+      "LiveTranscript": {
+        "properties": {
+          "meeting_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Meeting Id"
+          },
+          "conference_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conference Id"
+          },
+          "is_live": {
+            "type": "boolean",
+            "title": "Is Live",
+            "default": false
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/LiveSegment"
+            },
+            "type": "array",
+            "title": "Segments",
+            "default": []
+          },
+          "covered_through": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covered Through"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meeting_id"
+        ],
+        "title": "LiveTranscript",
+        "description": "``GET /plugin/v1/meetings/{id}/live/transcript?since=``: what has been said so far in a\nmeeting this installation hosts (``meetings.live.read``, a trusted scope, ADR-0083).\n\nPolled, like Korsi's own room, and answered from the same reading\n(``live_insight.transcript_view``): the newest room session, and the same cursor -- pass\n``covered_through`` back as ``since`` and the answer holds only what came after it. Only each\nline is shaped for a plugin (:class:`LiveSegment`)."
       },
       "LocalizedText": {
         "properties": {
@@ -6142,6 +7539,34 @@
               }
             ]
           },
+          "restricted": {
+            "type": "boolean",
+            "title": "Restricted",
+            "default": false
+          },
+          "origin_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Plugin Id"
+          },
+          "host_installation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Installation Id"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -6304,6 +7729,34 @@
                 "type": "null"
               }
             ]
+          },
+          "restricted": {
+            "type": "boolean",
+            "title": "Restricted",
+            "default": false
+          },
+          "origin_plugin_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Plugin Id"
+          },
+          "host_installation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Installation Id"
           },
           "created_at": {
             "type": "string",
@@ -6764,6 +8217,75 @@
         ],
         "title": "MilestoneStatus"
       },
+      "ModelCompletion": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CompletionUsage"
+          },
+          "usd_cost": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Usd Cost"
+          },
+          "finish_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content",
+          "model",
+          "usage",
+          "usd_cost"
+        ],
+        "title": "ModelCompletion",
+        "description": "The model's answer, and what it cost the publisher."
+      },
+      "ModelMessage": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/ModelRole"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ModelMessage"
+      },
+      "ModelRole": {
+        "type": "string",
+        "enum": [
+          "system",
+          "user",
+          "assistant"
+        ],
+        "title": "ModelRole"
+      },
       "OpenHold": {
         "properties": {
           "service": {
@@ -7123,6 +8645,158 @@
         "title": "PluginEventView",
         "description": "One event in an installation's stream: thin, with ids, never content (section 13)."
       },
+      "PluginFile": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "File Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Type"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "granted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granted By"
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Granted At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "name",
+          "granted_at",
+          "created_at"
+        ],
+        "title": "PluginFile",
+        "description": "``GET /plugin/v1/files/{id}``: a file a person picked for this installation in Korsi's own\nfile picker (``files.read``). While the installation uses it, its owner removing it only\narchives it. Any other file of theirs is not found."
+      },
+      "PluginFileText": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "File Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "extraction": {
+            "$ref": "#/components/schemas/TextExtraction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "text",
+          "extraction"
+        ],
+        "title": "PluginFileText",
+        "description": "``GET /plugin/v1/files/{id}/text``: the text Korsi read out of a file it was handed. A file\nwith no text Korsi may read -- a scan without ``models.use``, an archive -- answers\n``plugin.text_unavailable``."
+      },
+      "PluginModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "context_window": {
+            "type": "integer",
+            "title": "Context Window"
+          },
+          "input_usd_per_million": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Input Usd Per Million"
+          },
+          "output_usd_per_million": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Output Usd Per Million"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "context_window",
+          "input_usd_per_million",
+          "output_usd_per_million"
+        ],
+        "title": "PluginModel",
+        "description": "A language model Korsi lets trusted plugins use, and what it costs the publisher."
+      },
+      "PluginModelPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PluginModel"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PluginModelPage",
+        "description": "``GET /plugin/v1/models``."
+      },
       "PluginProposalEvidence": {
         "properties": {
           "source_id": {
@@ -7226,6 +8900,14 @@
             },
             "type": "array",
             "title": "Scopes"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions",
+            "default": []
           },
           "settings": {
             "additionalProperties": true,
@@ -7392,7 +9074,9 @@
           "case.change",
           "decision.candidate",
           "calendar.event.create",
-          "memory.finding"
+          "memory.finding",
+          "case.create",
+          "case.stage.move"
         ],
         "title": "ProposalType",
         "description": "What a plugin may propose into Korsi's own records (section 11)."
@@ -7612,6 +9296,159 @@
         "title": "PutRecord",
         "description": "Write one of the plugin's own records, keyed by the plugin's own id for it."
       },
+      "QueryRecords": {
+        "properties": {
+          "where": {
+            "items": {
+              "$ref": "#/components/schemas/RecordCondition"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Where",
+            "default": []
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "order_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 50
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "QueryRecords",
+        "description": "``POST /plugin/v1/records/{type}/query``: the plugin's records of a type, by their fields\n(ADR-0085).\n\nEvery condition must hold. The query is always read through the reader's own filter -- the\ntype's visibility and its ``read_permission`` -- so it never shows a reader a record a list of\nthe same type would not. Ordered by a field, the cursor carries that field's value and the\nrecord's id; records with no value for it come last."
+      },
+      "RecordCondition": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+            "title": "Field"
+          },
+          "op": {
+            "$ref": "#/components/schemas/FieldOperator"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "op"
+        ],
+        "title": "RecordCondition",
+        "description": "One condition of a record query: a declared field, how to compare it, and with what."
+      },
+      "RecordOrder": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+            "title": "Field",
+            "default": "updated_at"
+          },
+          "dir": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Dir",
+            "default": "desc"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RecordOrder",
+        "description": "What a record query is ordered by: a declared field, or when the record last changed."
+      },
       "RecordPage": {
         "properties": {
           "items": {
@@ -7744,10 +9581,121 @@
         "enum": [
           "organization",
           "case",
-          "personal"
+          "personal",
+          "case_members"
         ],
         "title": "RecordVisibility",
         "description": "Who sees a plugin's record of a given type (decision 17)."
+      },
+      "RecordingConsent": {
+        "type": "string",
+        "enum": [
+          "required",
+          "none"
+        ],
+        "title": "RecordingConsent",
+        "description": "Whether Korsi asks for consent before a hosted meeting is recorded (ADR-0083)."
+      },
+      "RequestCompletion": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ModelMessage"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Messages"
+          },
+          "response_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 16000.0,
+            "minimum": 1.0,
+            "title": "Max Tokens"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Purpose"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "model",
+          "messages",
+          "max_tokens",
+          "purpose",
+          "idempotency_key"
+        ],
+        "title": "RequestCompletion",
+        "description": "``POST /plugin/v1/models/complete``: one answer from one of Korsi's models (ADR-0081).\n\nKorsi calls the model itself, down the path its own calls take, so the organization's data goes\nnowhere it does not go already, and the plugin brings no key. The call is metered with its\ndollar cost, paid by the publisher -- never the organization -- and ``purpose`` is recorded\nbeside it. The same ``idempotency_key`` from the same installation answers the first call's\nanswer again rather than paying twice: the first answer is replayed for an hour, and a key\nreused for a different request is ``request.invalid``. Not streamed."
+      },
+      "ResponseFormat": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ResponseFormatType",
+            "default": "text"
+          },
+          "json_schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonSchemaFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ResponseFormat"
+      },
+      "ResponseFormatType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "json_object",
+          "json_schema"
+        ],
+        "title": "ResponseFormatType"
       },
       "Sensitivity": {
         "type": "string",
@@ -7894,6 +9842,15 @@
         ],
         "title": "SubmitProposal",
         "description": "The one envelope every plugin proposal arrives in (section 11)."
+      },
+      "TextExtraction": {
+        "type": "string",
+        "enum": [
+          "local",
+          "ocr"
+        ],
+        "title": "TextExtraction",
+        "description": "How Korsi read a file's text."
       },
       "TranscriptSegment": {
         "properties": {
