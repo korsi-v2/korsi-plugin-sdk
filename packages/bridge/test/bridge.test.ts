@@ -16,6 +16,7 @@ import {
   PluginApiError,
   PROTOCOL,
   type KorsiBridge,
+  type KorsiConnection,
 } from '@korsi/bridge';
 
 import { context, frameInKorsi, hasRuntime, importRuntime, KORSI } from './korsi-frame.js';
@@ -153,6 +154,51 @@ describe('the plugin’s own server, as the person', () => {
     expect(error).toBeInstanceOf(PluginApiError);
     expect(error).toMatchObject({ status: 402, code: 'plugin.wallet_insufficient' });
   });
+
+  it('asks Korsi for a lost credential again, and tells a refusal from a wait that ran out', async () => {
+    let lost = true;
+    let renewal: () => Promise<void> = async () => {
+      lost = false;
+    };
+    const renewCredential = vi.fn(() => renewal());
+    const bridge = {
+      getContext: () => ({ installation_id: 'inst-1' }),
+      getHandle: async () => 'kph_live',
+      renewCredential,
+    } as unknown as KorsiBridge;
+    const api = createPluginApi(bridge, {
+      fetch: async () =>
+        lost
+          ? new Response(JSON.stringify({ code: 'plugin.unprovisioned' }), { status: 409 })
+          : new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    });
+    const rejecting = (code: string) => async () => {
+      throw Object.assign(new Error(`korsi-bridge: ${code}`), { code });
+    };
+
+    // Given again: the call is made once more, and goes through.
+    expect(await api.request('/api/me')).toEqual({ ok: true });
+    expect(renewCredential).toHaveBeenCalledTimes(1);
+
+    // Refused: Korsi's own answer for an installation no longer shown, not the server's 409.
+    lost = true;
+    renewal = rejecting('failed');
+    const refused = await api.fetch('/api/me');
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ code: 'plugin.not_visible' });
+    expect(await api.request('/api/me').catch((e) => e)).toMatchObject({
+      status: 403,
+      code: 'plugin.not_visible',
+    });
+
+    // The wait ran out: the server's 409, since it may still be coming back.
+    renewal = rejecting('timeout');
+    expect(await api.request('/api/me').catch((e) => e)).toMatchObject({
+      status: 409,
+      code: 'plugin.unprovisioned',
+    });
+    expect(renewCredential).toHaveBeenCalledTimes(4);
+  });
 });
 
 describe.skipIf(!hasRuntime)("Korsi's own runtime", () => {
@@ -236,5 +282,66 @@ describe.skipIf(!hasRuntime)("Korsi's own runtime", () => {
       result: { status: 'rejected', action_id: null, error_code: null },
     });
     expect(await opening).toEqual({ status: 'rejected', action_id: null, error_code: null });
+  });
+
+  it('tells Korsi a move back with `replace` too, for a Korsi that knows only that', async () => {
+    const { posted, deliver } = frameInKorsi();
+    window.history.replaceState({}, '', `/app?korsi_origin=${encodeURIComponent(KORSI)}`);
+    const connected: { korsi?: KorsiConnection | null } = {};
+    void connectKorsi({ allowedOrigins: [KORSI], importModule: importRuntime }).then((korsi) => {
+      connected.korsi = korsi;
+    });
+    await vi.waitFor(
+      () => {
+        deliver({ protocol: PROTOCOL, type: MESSAGES.init, payload: context() });
+        if (!connected.korsi) throw new Error('not connected yet');
+      },
+      { timeout: 5000 }
+    );
+    const { bridge } = connected.korsi!;
+    bridge.navigate('/criteria/7/edit');
+    bridge.navigate('/criteria/7', { back: true });
+    bridge.navigate('/criteria', { replace: true });
+    const moves = posted.filter((entry) => entry.message.type === MESSAGES.navigate);
+    expect(moves.map((entry) => entry.message.payload)).toEqual([
+      { path: '/criteria/7/edit', replace: false },
+      { path: '/criteria/7', replace: true, back: true },
+      { path: '/criteria', replace: true },
+    ]);
+  });
+
+  it('names the app page’s screen for the status bar, as one line of plain text', async () => {
+    const { posted, deliver } = frameInKorsi();
+    window.history.replaceState({}, '', `/app?korsi_origin=${encodeURIComponent(KORSI)}`);
+    const connected: { korsi?: KorsiConnection | null } = {};
+    void connectKorsi({ allowedOrigins: [KORSI], importModule: importRuntime }).then((korsi) => {
+      connected.korsi = korsi;
+    });
+    // Korsi answers the page's ready -- or, connected by the test before, speaks to it again.
+    await vi.waitFor(
+      () => {
+        deliver({ protocol: PROTOCOL, type: MESSAGES.init, payload: context() });
+        if (!connected.korsi) throw new Error('not connected yet');
+      },
+      { timeout: 5000 }
+    );
+    const { bridge } = connected.korsi!;
+    expect(typeof bridge.setTitle).toBe('function');
+
+    bridge.setTitle!('  مدیر محصول\n  ·\u202e  تهران ');
+    bridge.setTitle!('   ');
+    bridge.setTitle!(null);
+    bridge.setTitle!('ا'.repeat(130));
+    const titles = posted.filter((entry) => entry.message.type === MESSAGES.title);
+    expect(titles.map((entry) => entry.message.payload)).toEqual([
+      { title: 'مدیر محصول · تهران' },
+      { title: null },
+      { title: null },
+      { title: 'ا'.repeat(120) },
+    ]);
+    // Told, not asked: nothing waits for an answer, and it goes only to the Korsi pinned.
+    expect(titles.every((entry) => entry.message.id === undefined && entry.origin === KORSI)).toBe(
+      true
+    );
   });
 });

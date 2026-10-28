@@ -18,16 +18,23 @@ export {
   type ConfirmQuestion,
   type ConnectOptions,
   type DecidedProposal,
+  type ExtensionPoint,
   type KorsiBridge,
   type KorsiContext,
+  type KorsiDisplay,
   type KorsiHandle,
+  type KorsiPageRef,
   type KorsiPalette,
   type KorsiRecordContext,
   type KorsiTheme,
+  type LiveSegment,
+  type MeetingLive,
   type MessageName,
   type MessageType,
   type PickedCase,
+  type PickedFile,
   type PickedPerson,
+  type PickFileOptions,
   type ToastKind,
 } from './protocol.js';
 export {
@@ -47,7 +54,9 @@ export {
 export {
   createPluginApi,
   INSTALLATION_HEADER,
+  NOT_VISIBLE,
   PluginApiError,
+  UNPROVISIONED,
   type PluginApi,
   type PluginApiOptions,
 } from './api.js';
