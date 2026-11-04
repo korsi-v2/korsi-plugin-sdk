@@ -191,7 +191,10 @@ plugin API 1.7 (ADR-0096), a full `decision.candidate` carries `follow_ups` per 
 `{"$case": key}`; recording the decision applies the chosen option's ticked ones, and
 `get_decision()` gives `follow_ups[]` with each one's `state` and `result`. A `case.create` takes
 `observers` and planned work on its stages, and `case.change` takes `change_case_owner`, decided by
-the case's owner alone.
+the case's owner alone. From plugin API 1.9, `single_person_risk()` on a person's handle lists
+that person's own unobserved cases and single-person decisions with titles (theirs alone), and
+`put_card(...)` puts up to ten proposals on their desk as one card they confirm with one press,
+read back with `get_card(card_id)`; each proposal on it settles as `card:<card_id>:<key>`.
 `Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
 must reach the plugin at once.
 

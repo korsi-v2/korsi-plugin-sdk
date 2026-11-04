@@ -266,6 +266,20 @@ stage. A stage that plans work has a key. Only a follow-up names another `owner_
 together reaches the case's owner as one context card. `case.change` takes `change_case_owner`,
 which only the case's current owner decides.
 
+**A person's own single-person risk** (plugin API 1.9). `singlePersonRisk()` on a person's handle
+(`people.load.read`) lists, for that person alone, the rows behind their own `cases_without_observer`
+and `single_person_decisions`: the followed cases they own that no colleague but them reads, and the
+followed decisions naming only them, with titles -- their handover list. Anybody else's are numbers
+only, from `peopleLoad`.
+
+**One card from your page** (plugin API 1.9). `putCard({ title, changes })` on a person's handle puts
+up to ten proposals -- each `{ key, summary, after?, type, addressed_to, payload }`, addressed to that
+person or to a case they read -- on their desk in «آماده برای شما» as one card from your plugin: they
+untick any and confirm the rest with one press. Each proposal on a confirmed card settles as
+`card:<card_id>:<key>`; `getCard(cardId)` tells the card's `status` (`pending`, `applied`, `failed`,
+`rejected`) and what became of each change. At most 30 cards wait on one desk
+(`plugin.cards_waiting`).
+
 **Permissions.** `Caller.permissions` and `ToolCall.permissions` / `ActionCall.permissions` are the
 plugin's own permissions the person holds (ADR-0082), by their bare keys. Korsi enforces them where
 it shows the plugin's things; inside the plugin's routes the plugin does. A page's caller is reused

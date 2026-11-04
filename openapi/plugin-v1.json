@@ -3,7 +3,7 @@
   "info": {
     "title": "Korsi plugin API",
     "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's five budgets -- reads,\nwrites, sources, proposals, models (:mod:`.limits`) -- before it opens a session, and past one it\nis answered ``429`` with ``Retry-After``.\n",
-    "version": "1.7"
+    "version": "1.9"
   },
   "paths": {
     "/plugin/v1/installation": {
@@ -3690,10 +3690,278 @@
           }
         }
       }
+    },
+    "/plugin/v1/people/single-person-risk": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: people"
+        ],
+        "summary": "The person's own single-person risk, item by item",
+        "description": "Needs `people.load.read`, on a person's behalf only (`403 plugin.personal_needs_person` for the plugin acting as itself), and answers for that person alone: the followed (draft or open) cases they own that no colleague but them reads -- no observer, or private -- and the followed decisions naming nobody but them (as owner, sponsor, authority, approver or a recorded stakeholder), with titles, oldest first, at most 200 of each. The rows behind their own `cases_without_observer` and `single_person_decisions` in `POST /people/load`; anybody else's are numbers only.",
+        "operationId": "single_person_risk_plugin_v1_people_single_person_risk_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SinglePersonRisk"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cards": {
+      "post": {
+        "tags": [
+          "plugin",
+          "plugin: cards"
+        ],
+        "summary": "Put one card of proposals in front of the person you act for",
+        "description": "On a person's behalf only (`403 plugin.personal_needs_person` for the plugin acting as itself). `changes` are 1 to 10 proposals, each with a `key`, a one-line `summary` in the person's language, `after` (earlier keys it builds on) and the proposal's `type`, `addressed_to` (that person, or a case they read) and `payload`, checked now as each would be applied (`422 plugin.proposal_invalid`). The card waits on the person's desk in «آماده برای شما»; they untick any change and confirm the rest with one press, or decline it. At most 30 cards wait on one desk (`409 plugin.cards_waiting`). Each proposal on a confirmed card is settled as `card:<card_id>:<key>`.",
+        "operationId": "put_card_plugin_v1_cards_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitPluginCard"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginCardView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "resource.conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "request.invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/cards/{card_id}": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: cards"
+        ],
+        "summary": "One card your page put in front of somebody, and what became of it",
+        "operationId": "get_card_plugin_v1_cards__card_id__get",
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Card Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginCardView"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "resource.not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AcceptProposal": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalActionEdits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalCaseEdits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdvanceStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "record": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordProposedDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AcceptProposal",
+        "description": "Accepting, optionally with the person's edits. An empty body applies the proposal as sent.\n\nEach edit is for its own kind only, and at most one is given: a body for another kind is\nrefused (``plugin.proposal_edits_not_allowed``)."
+      },
       "ActionDetail": {
         "properties": {
           "id": {
@@ -4107,6 +4375,84 @@
         "title": "AddressKind",
         "description": "Whom a proposal is put in front of."
       },
+      "AdvanceStage": {
+        "properties": {
+          "command_type": {
+            "type": "string",
+            "const": "advance_stage",
+            "title": "Command Type",
+            "default": "advance_stage"
+          },
+          "to_stage_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Stage Key"
+          },
+          "override_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "planned_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedOverride"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Planned Overrides"
+          },
+          "carry_over": {
+            "items": {
+              "$ref": "#/components/schemas/CarryOver"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Carry Over"
+          },
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AdvanceStage",
+        "description": "Move the case to another stage — the next one unless ``to_stage_key`` names a different one.\n\n**The gate is soft (ADR-0027).** Moving forward while the current stage has required checklist\nitems not ticked, or required work still open (ADR-0048), is refused unless ``override_reason``\nsays why it is right to go on anyway. With a reason it proceeds, and the reason and what was\nunmet are written to the timeline. Moving back needs no reason: returning to an earlier stage is\na correction, not a shortcut. Documents never hold a stage back (ADR-0031).\n\n**Entering a stage creates the work it plans** (ADR-0048), in this command's transaction, as the\nadvance dialog previewed it: ``planned_overrides`` carries what the person changed — a task left\nout, another owner, another date. ``carry_over`` moves open work of the stage being left into\nthe new one, completes it, or cancels it with ``cancel_reason``. Work completed in the same move\nno longer holds the stage it is leaving."
+      },
       "Authority": {
         "type": "string",
         "enum": [
@@ -4316,6 +4662,36 @@
         ],
         "title": "CalendarPage",
         "description": "A window of the calendar.\n\n``truncated`` means the window held more than one answer carries: ask again from\n``resume_from``."
+      },
+      "CarryOver": {
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Link Id"
+          },
+          "choice": {
+            "$ref": "#/components/schemas/CarryOverChoice"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "link_id",
+          "choice"
+        ],
+        "title": "CarryOver",
+        "description": "One piece of the stage's open work, and what to do with it as the case moves on."
+      },
+      "CarryOverChoice": {
+        "type": "string",
+        "enum": [
+          "move",
+          "complete",
+          "cancel"
+        ],
+        "title": "CarryOverChoice",
+        "description": "What happens to open work of the stage being left, when somebody says (ADR-0048).\n\nWork nobody chose for stays where it was and is \"carried over\": still open, still in its stage."
       },
       "CaseActivity": {
         "properties": {
@@ -5466,6 +5842,16 @@
         ],
         "title": "CaseType",
         "description": "A coarse category, for defaults and filtering.\n\nNot a module and not a workflow: every type shares one lifecycle. The value exists so\na tenant can see their sales cases separately, not so the system can behave\ndifferently."
+      },
+      "ChangeStatus": {
+        "type": "string",
+        "enum": [
+          "applied",
+          "failed",
+          "skipped"
+        ],
+        "title": "ChangeStatus",
+        "description": "What became of one change on a confirmed card."
       },
       "ChecklistItem": {
         "properties": {
@@ -7005,6 +7391,58 @@
           "critical"
         ],
         "title": "ImpactLevel"
+      },
+      "InitialStep": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "InitialStep",
+        "description": "One piece of work named while capturing a case.\n\nBecomes a real Action in the Actions context, linked to the case, in the same transaction as the\ncase itself. It used to be a sequence the browser ran — create the case, then each Action, then\neach link — so a failure half way left a case with some of its steps, and pressing \"save\" again\nmade a second case."
       },
       "InstallationState": {
         "type": "string",
@@ -9060,6 +9498,59 @@
         "title": "OrganizationalUnitKind",
         "description": "What kind of structure a unit is.\n\nA closed, deliberately short list. The temptation is to let each tenant name its own levels, and\nthat is what the custom-object platform is for; a unit kind is read by product logic, so an open\nvocabulary would make it unusable for anything but display."
       },
+      "PageCardChange": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$",
+            "title": "Key"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "after": {
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "After",
+            "default": []
+          },
+          "kind": {
+            "type": "string",
+            "const": "proposal",
+            "title": "Kind",
+            "default": "proposal"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProposalType"
+          },
+          "addressed_to": {
+            "$ref": "#/components/schemas/ProposalAddress"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "summary",
+          "type",
+          "addressed_to",
+          "payload"
+        ],
+        "title": "PageCardChange",
+        "description": "One change on a card from the plugin's own page: a proposal, so ``kind`` may be left out."
+      },
       "ParticipantRole": {
         "type": "string",
         "enum": [
@@ -9247,6 +9738,244 @@
           "once"
         ],
         "title": "PlanPeriod"
+      },
+      "PlannedOverride": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "create": {
+            "type": "boolean",
+            "title": "Create",
+            "default": true
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "item_id"
+        ],
+        "title": "PlannedOverride",
+        "description": "The person's choice for one planned task of the stage being entered (ADR-0048).\n\n``create=False`` sets the task aside (``dismissed``) instead of creating it. ``assignee_id``\nand ``due_at`` count only when they are sent: ``null`` means unassigned or no due date, and\nleaving a field out keeps what the plan's rule gives — the value the dialog previewed."
+      },
+      "PluginCardEdits": {
+        "properties": {
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arguments"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PluginCardEdits",
+        "description": "What the person changed on one of a card's changes before confirming it (ADR-0080 decision\n5, as ADR-0068 has it for a proposal): an action's arguments, or a proposal in Korsi's own\nform."
+      },
+      "PluginCardView": {
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Card Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PluginChangeOutcome"
+            },
+            "type": "array",
+            "title": "Changes",
+            "default": []
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card_id",
+          "user_id",
+          "title",
+          "status",
+          "created_at"
+        ],
+        "title": "PluginCardView",
+        "description": "A card the plugin's page put in front of a person, as the plugin reads it back.\n\n``pending`` while it waits; ``applied`` when one change or more applied, ``failed`` when none\ndid, ``rejected`` when the person declined it. ``changes`` is what became of each change, in\nthe card's order, once it was confirmed (empty while it waits and when it was declined)."
+      },
+      "PluginChangeOutcome": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChangeStatus"
+          },
+          "skipped_because": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkipReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/PluginRecordRef"
+            },
+            "type": "array",
+            "title": "Records",
+            "default": []
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Params"
+          },
+          "edited": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "status"
+        ],
+        "title": "PluginChangeOutcome",
+        "description": "What became of one change on a confirmed card, and what it produced."
       },
       "PluginEventPage": {
         "properties": {
@@ -9517,6 +10246,28 @@
         "type": "object",
         "title": "PluginProposalEvidence"
       },
+      "PluginRecordRef": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "external_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "External Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "external_id"
+        ],
+        "title": "PluginRecordRef",
+        "description": "One of the plugin's own records, by the plugin's own keys for it."
+      },
       "PluginSelf": {
         "properties": {
           "installation_id": {
@@ -9687,6 +10438,137 @@
           }
         ]
       },
+      "ProposalActionEdits": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "estimate_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Minutes"
+          },
+          "checklist": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checklist"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProposalActionEdits",
+        "description": "What the person changed on an ``action.create`` before applying it: Korsi's own new-action\nform, opened filled in with the plugin's proposal, as they saved it.\n\nA field left out keeps the plugin's value; ``null`` clears an assignee, a date or an estimate.\nThe action is still the plugin's proposal applied -- marked as its work, the proposal settled\nand the plugin told -- only with the person's words. The fields are the form's: what\n``CreateAction`` takes from a person."
+      },
       "ProposalAddress": {
         "properties": {
           "kind": {
@@ -9711,6 +10593,180 @@
           "kind"
         ],
         "title": "ProposalAddress"
+      },
+      "ProposalCaseEdits": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "case_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidentiality": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Sensitivity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CasePriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Date"
+          },
+          "template_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Key"
+          },
+          "stages": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StageDraft"
+                },
+                "type": "array",
+                "maxItems": 30,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stages"
+          },
+          "counterparty_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Name"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InitialStep"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "participants": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProposedCaseParticipant"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participants"
+          },
+          "observers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProposalCaseEdits",
+        "description": "What the person changed on a ``case.create`` before applying it: Korsi's new-case form,\nopened filled in with the plugin's proposal, as they saved it (ADR-0084).\n\nA field left out keeps the plugin's value; ``null`` clears a description, a target date or a\ntemplate, and an owner left ``null`` is the person accepting. The case is still the plugin's\nproposal applied -- its origin recorded, the proposal settled and the plugin told -- only with\nthe person's words. The fields are the form's.\n\n**The people involved are the person's to change too.** ``participants`` replaces the plugin's\nlist whole: whoever the person took off is never added, and whoever they added is, as\n``add_participant`` adds anybody. On a confidential case they are its readers, so who reads it\nis the person's choice, not the plugin's. ``[]`` involves nobody beside the owner."
       },
       "ProposalPage": {
         "properties": {
@@ -9917,6 +10973,26 @@
           "created_at"
         ],
         "title": "ProposalView"
+      },
+      "ProposedCaseParticipant": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole",
+            "default": "participant"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "ProposedCaseParticipant",
+        "description": "Somebody a proposed case involves beside its owner, with their part in it."
       },
       "PutRecord": {
         "properties": {
@@ -10147,6 +11223,102 @@
         "type": "object",
         "title": "RecordPage"
       },
+      "RecordProposedDecision": {
+        "properties": {
+          "option_key": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 2,
+            "title": "Option Key"
+          },
+          "decision_statement": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Decision Statement"
+          },
+          "conditions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Conditions"
+          },
+          "effective_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective At"
+          },
+          "reversibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reversibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "rollback_trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback Trigger"
+          },
+          "evidence_waiver_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Waiver Reason"
+          },
+          "skipped_follow_ups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Skipped Follow Ups"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "option_key",
+          "decision_statement"
+        ],
+        "title": "RecordProposedDecision",
+        "description": "Recording a full ``decision.candidate`` in the same save that accepts it (ADR-0096).\n\nKorsi's own record-decision form, opened on the candidate for the person who is its decider,\nas they saved it: the option by the plugin's key, and the rest as ``record_decision`` takes it.\nApplied after the decision is created, through the register's own handler, so every refusal\nthe decision page makes -- not the decider, a consequential choice without a review date, no\nevidence and no reason -- is made here, and the proposal then stays pending for the person."
+      },
       "RecordView": {
         "properties": {
           "id": {
@@ -10370,6 +11542,76 @@
         ],
         "title": "ResponseFormatType"
       },
+      "Reversibility": {
+        "type": "string",
+        "enum": [
+          "easily_reversible",
+          "reversible_with_cost",
+          "hard_to_reverse",
+          "irreversible",
+          "unknown"
+        ],
+        "title": "Reversibility",
+        "description": "How hard it would be to undo.\n\nDrives how much analysis and approval the domain expects: an irreversible decision with\none option and no approval is refused, while a reversible one is not."
+      },
+      "RiskCase": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "lifecycle_status": {
+            "$ref": "#/components/schemas/CaseLifecycle"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "lifecycle_status"
+        ],
+        "title": "RiskCase",
+        "description": "A followed case the person owns that no colleague but them reads: no observer, or private."
+      },
+      "RiskDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision_state": {
+            "$ref": "#/components/schemas/DecisionState"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "decision_state"
+        ],
+        "title": "RiskDecision",
+        "description": "A followed decision on which nobody but the person is named -- as owner, sponsor, authority,\napprover or a recorded stakeholder."
+      },
       "Sensitivity": {
         "type": "string",
         "enum": [
@@ -10411,6 +11653,56 @@
         ],
         "title": "SettleHold"
       },
+      "SinglePersonRisk": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/RiskCase"
+            },
+            "type": "array",
+            "title": "Cases",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/RiskDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "more_cases": {
+            "type": "boolean",
+            "title": "More Cases",
+            "default": false
+          },
+          "more_decisions": {
+            "type": "boolean",
+            "title": "More Decisions",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "SinglePersonRisk",
+        "description": "``GET /plugin/v1/people/single-person-risk``: the rows behind the person's own\n``cases_without_observer`` and ``single_person_decisions`` (design §8ب.4), **for the person\nthemself alone** -- their handover list. Everybody else is told the numbers only, by\n``POST /people/load``. Oldest first; at most 200 of each, ``more_*`` true when there are more."
+      },
+      "SkipReason": {
+        "type": "string",
+        "enum": [
+          "unticked",
+          "earlier_not_applied"
+        ],
+        "title": "SkipReason",
+        "description": "Why a change on a confirmed card was not attempted."
+      },
       "SourceConsent": {
         "properties": {
           "channel": {
@@ -10450,6 +11742,78 @@
         ],
         "title": "SourceConsent",
         "description": "Who agreed to this material reaching Korsi, through which channel."
+      },
+      "StageDraft": {
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StageDraft",
+        "description": "One stage in a list somebody arranged: a stage that exists, by key, or a new one, by name.\n\n``key`` names a stage the list already had — the case's own, or the template's at creation — and\na draft that carries one keeps that stage's identity: its key, its checklist, its history. A\ndraft without a key is a new stage and is given a fresh key by the server; keys are identifiers,\nnever shown, so the person arranging the list never has to invent one.\n\n``name`` left out keeps the stage's current name — which, for a built-in stage, is a\ntranslation the client showed rather than text anybody typed. Given, it replaces the name and\nthe stage stops being translated: it is now in the words of the person who wrote it."
+      },
+      "SubmitPluginCard": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PageCardChange"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "changes"
+        ],
+        "title": "SubmitPluginCard",
+        "description": "``POST /plugin/v1/cards``: changes to Korsi's own records that belong together, put in front\nof one person as **one card** from the plugin's own page (plugin API 1.9) -- a leaving\ncolleague's handovers, say, confirmed once instead of one by one.\n\n**On a person's handle only, for that person.** The card waits on their desk in «آماده برای\nشما» (like an outside assistant's), from the plugin by name and mark; they may untick any change\nand confirm the rest with one press, or decline it. Each change is a proposal the plugin may\nmake -- a type its manifest declares, under a scope it was given, addressed to that person or to\na case they may decide on -- and is checked now as it would be applied. Confirming submits each\nand accepts it as the person, in the card's order, each on its own; a change that fails is named\non the card and the others stay applied. Every proposal on it reaches the plugin as\n``plugin.proposal.settled`` with ``external_id`` ``card:<card_id>:<key>``.\n\nCounted as one proposal against the installation's proposals budget, and toward its acceptance\nrate once, as a specialist's card is (ADR-0080 decision 7)."
       },
       "SubmitProposal": {
         "properties": {
