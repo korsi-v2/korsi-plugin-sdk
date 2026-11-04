@@ -30,6 +30,8 @@ app.post('/korsi/events', raw, async (req, res) => {
 });
 
 // A read tool Korsyar asks, for a person: answer within ten seconds, change nothing.
+// A read tool. Korsyar asks it, and so does the person's own ChatGPT or Claude, which Korsi shows
+// it as `<plugin>__<tool>` on its MCP server (ADR-0094).
 app.post('/korsi/tools/:name', raw, async (req, res) => {
   const { installation, call } = await plugin.toolCall(req.params.name, req.body, signature(req));
   const korsi = plugin.client(installation, call.handle); // as the person

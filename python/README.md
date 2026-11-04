@@ -34,7 +34,8 @@ async def on_event(installation, event):
 
 status = await plugin.event(raw_body, headers.get(SIGNATURE_HEADER), on_event)
 
-# POST /korsi/tools/{name} -- a read tool: read Korsi as the person the question is for.
+# POST /korsi/tools/{name} -- a read tool: read Korsi as the person the question is for. Korsyar asks
+# it, and so does the person's own ChatGPT or Claude, which Korsi shows it as `<plugin>__<tool>`.
 installation, call = await plugin.tool_call(name, raw_body, headers.get(SIGNATURE_HEADER))
 threads = await plugin.client(installation, call.handle).records("thread")
 
