@@ -158,6 +158,7 @@ class RecordTypeSpec(TypedDict):
     schema: dict[str, Any]
     fields: NotRequired[list[FieldSpec]]
     read_permission: NotRequired[str | None]
+    read_all_permission: NotRequired[str | None]
 
 
 class RuntimeSpec(TypedDict):

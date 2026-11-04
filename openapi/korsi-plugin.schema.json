@@ -617,6 +617,18 @@
           ],
           "default": null,
           "title": "Read Permission"
+        },
+        "read_all_permission": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Read All Permission"
         }
       },
       "required": [

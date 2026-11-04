@@ -144,6 +144,7 @@ export interface RecordTypeSpec {
   schema: Record<string, unknown>;
   fields?: Array<FieldSpec>;
   read_permission?: string | null;
+  read_all_permission?: string | null;
 }
 
 /** Where the plugin's code runs, and how Korsi reaches it (section 17). */
