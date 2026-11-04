@@ -289,3 +289,36 @@ that matters.
 **Through Korsyar.** Korsyar's `korsi_meeting_get` gives a plugin a meeting without its words
 (`transcript_withheld`) unless the plugin holds `meetings.transcript.read` and, for a restricted
 meeting, hosts it; `korsi_analysis_text` needs `meetings.transcript.read` too.
+
+
+## Feeds: the organization's own systems writing your records (plugin API 1.8)
+
+A plugin may declare up to five **inbound feeds** (ADR-0097): a shape an organization's ticket
+system, ERP or script writes into the plugin's own records through Korsi's machine door. The plugin
+never talks to that system and stays `egress: none`; installing it grants nothing -- the
+organization grants the feed to one of its system connections.
+
+```ts
+import { checkFeeds, defineFeed } from '@korsi/plugin';
+
+const tickets = defineFeed('tickets', {
+  names: { en: 'Tickets' },
+  consent: { en: 'Tickets from your ticket system, read by everybody in the organization.' },
+  recordType: 'ticket', // one of your record types: organization or case_members
+  sourceKey: 'ticket_no', // the system's own id: the record's external_id
+  fields: ['title', 'status', 'assignee'],
+  personFields: { assignee: ['email', 'personnel_number'] }, // stored as the member id
+  onMissing: 'mark',
+});
+const problems = checkFeeds({ ...manifest, feeds: [tickets] });
+```
+
+Each applied run puts one `plugin.feed.run` event in your stream (`feed`, `run_id`, `counts`,
+`complete`, `missing`; never rows), and its records carry `written_by: "connection:<id>"` and, when
+a complete run lacked them, `fed_missing_at`. The staff list gives each colleague's
+`employment_status`, `status_since` and `source_updated_at`.
+
+**The door, for an organization's IT.** `SystemClient`, `push`, `readRows` and `checkRows` talk to
+`/system/v1` with a connection's client credentials, and `korsi-feed` (this package's bin) is the
+same commands as the Python one -- `whoami`, `schema`, `check`, `push [--dry-run] [--complete]`,
+`status`, `apply` -- reading CSV, JSON and JSON lines, the credential from `KORSI_SYSTEM_*`.

@@ -20,6 +20,9 @@ ConnectionCapability = Literal["mail", "calendar", "calendar_attendees"]
 ConnectionFieldKind = Literal["text", "email", "url", "number", "boolean", "password"]
 DataEgress = Literal["none", "publisher", "third_party"]
 ExtensionPoint = Literal["record.panel", "desk.widget", "meeting.live.panel"]
+FeedMatch = Literal["source_key", "personnel_number", "email"]
+FeedOnMissing = Literal["keep", "mark"]
+FeedUpsert = Literal["merge", "replace"]
 PanelRecord = Literal["case", "meeting", "document"]
 PermissionLevel = Literal["view", "work", "manage"]
 Placement = Literal["external", "instance", "none"]
@@ -69,6 +72,29 @@ class DataHandling(TypedDict):
     stores: NotRequired[list[str]]
     retention_days: NotRequired[int | None]
     location: NotRequired[str | None]
+
+
+class FeedPersonField(TypedDict):
+    """A field of the row that names a colleague. Korsi resolves it by its matching rule and the"""
+
+    field: str
+    match: list[FeedMatch]
+
+
+class FeedSpec(TypedDict):
+    """An inbound feed the plugin declares (ADR-0097 clause 3)."""
+
+    key: str
+    names: LocalizedText
+    consent: LocalizedText
+    record_type: str
+    source_key: str
+    fields: list[str]
+    person_fields: NotRequired[list[FeedPersonField]]
+    upsert: NotRequired[FeedUpsert]
+    on_missing: NotRequired[FeedOnMissing]
+    max_rows: NotRequired[int]
+    headers: NotRequired[dict[str, Any]]
 
 
 class FieldSpec(TypedDict):
@@ -142,6 +168,7 @@ class PluginManifest(TypedDict):
     ui: NotRequired[UiSpec]
     settings_schema: NotRequired[dict[str, Any] | None]
     connections: NotRequired[list[ConnectionSpec]]
+    feeds: NotRequired[list[FeedSpec]]
     services: NotRequired[list[ServiceSpec]]
     plans: NotRequired[list[PlanSpec]]
     slots: NotRequired[SlotSpec]
@@ -244,6 +271,11 @@ __all__ = [
     "DataEgress",
     "DataHandling",
     "ExtensionPoint",
+    "FeedMatch",
+    "FeedOnMissing",
+    "FeedPersonField",
+    "FeedSpec",
+    "FeedUpsert",
     "FieldSpec",
     "LocalizedText",
     "PanelRecord",

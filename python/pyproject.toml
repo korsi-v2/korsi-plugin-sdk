@@ -15,6 +15,13 @@ classifiers = [
     "Typing :: Typed",
     "Framework :: AsyncIO",
 ]
+[project.optional-dependencies]
+# `korsi-feed` reads .xlsx files with it; CSV and JSON need nothing.
+xlsx = ["openpyxl>=3.1,<4"]
+
+[project.scripts]
+# Push a file to one of the organization's feeds through Korsi's machine door (ADR-0097).
+korsi-feed = "korsi_plugin.feed_cli:main"
 
 [dependency-groups]
 dev = [

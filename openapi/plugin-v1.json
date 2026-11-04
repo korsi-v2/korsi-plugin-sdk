@@ -3751,7 +3751,7 @@
           "plugin: cards"
         ],
         "summary": "Put one card of proposals in front of the person you act for",
-        "description": "On a person's behalf only (`403 plugin.personal_needs_person` for the plugin acting as itself). `changes` are 1 to 10 proposals, each with a `key`, a one-line `summary` in the person's language, `after` (earlier keys it builds on) and the proposal's `type`, `addressed_to` (that person, or a case they read) and `payload`, checked now as each would be applied (`422 plugin.proposal_invalid`). The card waits on the person's desk in «آماده برای شما»; they untick any change and confirm the rest with one press, or decline it. At most 30 cards wait on one desk (`409 plugin.cards_waiting`). Each proposal on a confirmed card is settled as `card:<card_id>:<key>`.",
+        "description": "On a person's behalf only (`403 plugin.personal_needs_person` for the plugin acting as itself). `changes` are 1 to 10 proposals, each with a `key`, a one-line `summary` in the person's language, `after` (earlier keys it builds on) and the proposal's `type`, `addressed_to` (that person, or a case they read) and `payload`, checked now as each would be applied (`422 plugin.proposal_invalid`). The card waits on the person's desk in Korsi's «Ready for you»; they untick any change and confirm the rest with one press, or decline it. At most 30 cards wait on one desk (`409 plugin.cards_waiting`). Each proposal on a confirmed card is settled as `card:<card_id>:<key>`.",
         "operationId": "put_card_plugin_v1_cards_post",
         "requestBody": {
           "content": {
@@ -6990,6 +6990,16 @@
         "title": "DocumentText",
         "description": "``GET /plugin/v1/documents/{id}/text``: the text Korsi read out of it, as it reads now."
       },
+      "EmploymentStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "long_leave",
+          "left"
+        ],
+        "title": "EmploymentStatus",
+        "description": "What the organization's own system says about somebody's employment (ADR-0097 clause 7).\n\nStored for display only. It changes no access and deactivates nobody: leaving goes through the\ndecision to end the collaboration and the exit case, which the HR plugin proposes when this\nbecomes ``left`` (open question 3). A staff-list file's \"status\" column saying somebody has gone\nreads as ``left``."
+      },
       "EmploymentType": {
         "type": "string",
         "enum": [
@@ -9345,6 +9355,40 @@
               }
             ],
             "title": "Leave As Of"
+          },
+          "employment_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Since"
+          },
+          "source_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Updated At"
           }
         },
         "type": "object",
@@ -11394,6 +11438,29 @@
             "type": "boolean",
             "title": "Read Only",
             "default": false
+          },
+          "written_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Written By"
+          },
+          "fed_missing_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fed Missing At"
           },
           "created_at": {
             "type": "string",

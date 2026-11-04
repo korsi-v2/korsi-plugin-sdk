@@ -34,6 +34,7 @@ export type DecisionOutcomeState = "not_due" | "measuring" | "on_track" | "mixed
 export type DecisionPriority = "low" | "normal" | "high" | "critical";
 export type DecisionState = "captured" | "triaged" | "framing" | "researching" | "optioning" | "evaluating" | "awaiting_recommendation" | "awaiting_decision" | "conditionally_decided" | "decided" | "deferred" | "rejected" | "reopened" | "superseded";
 export type DecisionType = "strategic" | "investment" | "commercial" | "operational" | "financial" | "people" | "technology" | "risk" | "compliance" | "legal" | "product" | "procurement" | "crisis" | "governance" | "policy_exception" | "other";
+export type EmploymentStatus = "active" | "long_leave" | "left";
 export type EmploymentType = "full_time" | "part_time" | "project" | "internship";
 export type EntryKind = "event" | "action_due" | "action_start" | "case_review" | "case_milestone" | "case_target" | "decision_target" | "decision_outcome_review" | "meeting";
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
@@ -849,6 +850,9 @@ export interface OrganizationMember {
   weekly_hours: number | null;
   leave_days_ahead: number | null;
   leave_as_of: string | null;
+  employment_status: EmploymentStatus | null;
+  status_since: string | null;
+  source_updated_at: string | null;
 }
 
 export interface OrganizationMemberPage {
@@ -1189,6 +1193,8 @@ export interface RecordView {
   owner_user_id: string | null;
   version: number;
   read_only: boolean;
+  written_by: string | null;
+  fed_missing_at: string | null;
   created_at: string;
   updated_at: string;
 }

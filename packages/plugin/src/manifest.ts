@@ -17,6 +17,9 @@ export type ConnectionCapability = "mail" | "calendar" | "calendar_attendees";
 export type ConnectionFieldKind = "text" | "email" | "url" | "number" | "boolean" | "password";
 export type DataEgress = "none" | "publisher" | "third_party";
 export type ExtensionPoint = "record.panel" | "desk.widget" | "meeting.live.panel";
+export type FeedMatch = "source_key" | "personnel_number" | "email";
+export type FeedOnMissing = "keep" | "mark";
+export type FeedUpsert = "merge" | "replace";
 export type PanelRecord = "case" | "meeting" | "document";
 export type PermissionLevel = "view" | "work" | "manage";
 export type Placement = "external" | "instance" | "none";
@@ -62,6 +65,27 @@ export interface DataHandling {
   stores?: Array<string>;
   retention_days?: number | null;
   location?: string | null;
+}
+
+/** A field of the row that names a colleague. Korsi resolves it by its matching rule and the */
+export interface FeedPersonField {
+  field: string;
+  match: Array<FeedMatch>;
+}
+
+/** An inbound feed the plugin declares (ADR-0097 clause 3). */
+export interface FeedSpec {
+  key: string;
+  names: LocalizedText;
+  consent: LocalizedText;
+  record_type: string;
+  source_key: string;
+  fields: Array<string>;
+  person_fields?: Array<FeedPersonField>;
+  upsert?: FeedUpsert;
+  on_missing?: FeedOnMissing;
+  max_rows?: number;
+  headers?: Record<string, unknown>;
 }
 
 /** A top-level property of a record type that Korsi keeps beside the record to filter and */
@@ -129,6 +153,7 @@ export interface PluginManifest {
   ui?: UiSpec;
   settings_schema?: Record<string, unknown> | null;
   connections?: Array<ConnectionSpec>;
+  feeds?: Array<FeedSpec>;
   services?: Array<ServiceSpec>;
   plans?: Array<PlanSpec>;
   slots?: SlotSpec;

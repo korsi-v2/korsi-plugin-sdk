@@ -38,6 +38,7 @@ DecisionOutcomeState = Literal["not_due", "measuring", "on_track", "mixed", "bel
 DecisionPriority = Literal["low", "normal", "high", "critical"]
 DecisionState = Literal["captured", "triaged", "framing", "researching", "optioning", "evaluating", "awaiting_recommendation", "awaiting_decision", "conditionally_decided", "decided", "deferred", "rejected", "reopened", "superseded"]
 DecisionType = Literal["strategic", "investment", "commercial", "operational", "financial", "people", "technology", "risk", "compliance", "legal", "product", "procurement", "crisis", "governance", "policy_exception", "other"]
+EmploymentStatus = Literal["active", "long_leave", "left"]
 EmploymentType = Literal["full_time", "part_time", "project", "internship"]
 EntryKind = Literal["event", "action_due", "action_start", "case_review", "case_milestone", "case_target", "decision_target", "decision_outcome_review", "meeting"]
 EventStatus = Literal["confirmed", "tentative", "cancelled"]
@@ -896,6 +897,9 @@ class OrganizationMember(TypedDict):
     weekly_hours: int | None
     leave_days_ahead: int | None
     leave_as_of: str | None
+    employment_status: EmploymentStatus | None
+    status_since: str | None
+    source_updated_at: str | None
 
 
 class OrganizationMemberPage(TypedDict):
@@ -1254,6 +1258,8 @@ class RecordView(TypedDict):
     owner_user_id: str | None
     version: int
     read_only: bool
+    written_by: str | None
+    fed_missing_at: str | None
     created_at: str
     updated_at: str
 
@@ -1449,6 +1455,7 @@ __all__ = [
     "DocumentItem",
     "DocumentPage",
     "DocumentText",
+    "EmploymentStatus",
     "EmploymentType",
     "EntryKind",
     "EventStatus",
