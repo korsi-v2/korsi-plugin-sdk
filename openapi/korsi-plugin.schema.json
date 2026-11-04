@@ -505,6 +505,7 @@
       "enum": [
         "people.read",
         "structure.read",
+        "people.load.read",
         "cases.read",
         "actions.read",
         "decisions.read",

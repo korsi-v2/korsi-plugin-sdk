@@ -80,7 +80,7 @@ TEXT_WAIT_SECONDS: Final = 600.0
 #: The plane's version, sent by Korsi on every response.
 VERSION_HEADER: Final = "Korsi-Plugin-API"
 #: The plugin API this SDK was generated for. A Korsi on another major version is not this contract.
-PLUGIN_API: Final = "1.5"
+PLUGIN_API: Final = "1.6"
 
 #: Backoff before each repeat of a model completion, in seconds.
 _COMPLETE_BACKOFF: Final = (1.0, 4.0, 10.0)

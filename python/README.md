@@ -180,7 +180,12 @@ the choice back by the plugin's own key (ADR-0096). From plugin API 1.5, `list_o
 ADR-0095): each active colleague's ids, `has_login`, post, five unit levels, `manager_member_id`, and
 `employment_type`, `employment_started_on`, `probation_ends_on`, `weekly_hours`, `leave_days_ahead`
 with `leave_as_of` -- never a personnel number, a place of work or anything of a personnel file; keep
-it in memory, store none of it. `Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
+it in memory, store none of it. From plugin API 1.6, `people_load()` asks colleagues' load
+(`POST /people/load`, `people.load.read`, on a person's handle only, ADR-0095): up to 200 colleagues
+and 35 days, numbers only -- tasks, estimates, meeting minutes inside working hours, working minutes,
+cases owned and unobserved, decisions waiting and single-person -- never a title; anybody outside the
+person's reporting line (or everybody, with Korsi's `member.load.read_all`) is in `withheld`.
+`Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
 must reach the plugin at once.
 
 The sample plugin ([developers.korsi.ai/docs/example](https://developers.korsi.ai/docs/example))

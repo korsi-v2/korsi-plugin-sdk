@@ -224,6 +224,24 @@ const colleagues = [];
 for await (const member of korsi.iterOrganizationMembers()) colleagues.push(member); // 500 a page
 ```
 
+**Colleagues' load** (plugin API 1.6, ADR-0095). `peopleLoad({ member_ids, from, to })` asks
+`POST /people/load` under `people.load.read`, **on a person's handle only** (`plugin.client(installation, handle)`; the plugin
+acting as itself gets `403 plugin.personal_needs_person`). Up to 200 colleagues by `member_id`, up to
+35 of the organization's days. For each colleague answered: open, overdue and undated tasks, their
+estimated minutes and how many carry none, the cases they own and those nobody else reads
+(`cases_without_observer`), the decisions waiting on them with the day each started waiting
+(`decisions_waiting_since`, oldest first) and those naming nobody but them; and per day the
+`working_minutes` (the organization's schedule scaled by `weekly_hours`, zero on a day off),
+`meeting_minutes` inside working hours, and the tasks falling on it (an overdue task falls on
+`today`). `has_calendar` is false for a colleague who does not sign in. **Numbers only, never a
+title**; private work is counted. Korsi answers for the person, everybody under them on the reporting
+line and, when they hold Korsi's `member.load.read_all`, everybody; anybody else asked for is in
+`withheld`. The order is the order asked: never sort people by load.
+
+```ts
+const load = await plugin.client(installation, handle).peopleLoad({ member_ids: team, from: '2026-11-07', to: '2026-12-04' });
+```
+
 **Permissions.** `Caller.permissions` and `ToolCall.permissions` / `ActionCall.permissions` are the
 plugin's own permissions the person holds (ADR-0082), by their bare keys. Korsi enforces them where
 it shows the plugin's things; inside the plugin's routes the plugin does. A page's caller is reused

@@ -3,7 +3,7 @@
   "info": {
     "title": "Korsi plugin API",
     "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's five budgets -- reads,\nwrites, sources, proposals, models (:mod:`.limits`) -- before it opens a session, and past one it\nis answered ``429`` with ``Retry-After``.\n",
-    "version": "1.5"
+    "version": "1.6"
   },
   "paths": {
     "/plugin/v1/installation": {
@@ -3612,6 +3612,84 @@
           }
         }
       }
+    },
+    "/plugin/v1/people/load": {
+      "post": {
+        "tags": [
+          "plugin",
+          "plugin: people"
+        ],
+        "summary": "How loaded these colleagues are, day by day, as numbers",
+        "description": "Needs `people.load.read`, on a person's behalf only (`403 plugin.personal_needs_person` for the plugin acting as itself). For each of `member_ids` (at most 200, each once) and each day from `from` to `to` (both included, at most 35 days, the organization's days): open and overdue tasks, their estimated minutes and how many carry none, meeting minutes inside working hours and the day's working minutes; and per colleague the open cases they own, those no colleague but them reads, the decisions waiting on them (with the day each started waiting) and those naming nobody but them. Numbers only, never a title; private work is counted. Answered for the person, everybody under them on the reporting line (`manager_member_id`, any depth) and, when they hold `member.load.read_all`, everybody; anybody else asked for is in `withheld`. In the order asked.",
+        "operationId": "people_load_plugin_v1_people_load_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeopleLoadQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeopleLoadPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "auth.forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "request.invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5533,6 +5611,51 @@
         ],
         "title": "ContextLinkType",
         "description": "What kind of thing a Context link points at.\n\nDeliberately open-ended and mostly external: a case links to a provider file, a URL, a\nmessage or another case. The type is stored so a link can be upgraded in place rather than\nre-created when the pipeline behind its kind lands.\n\n``MEETING`` and ``DOCUMENT`` are the two kinds this table no longer stores. They are still\nmembers because rows written before the ingestion contexts existed carry them, and because\nthe case view speaks one vocabulary whichever store a related item came from -- see\n:data:`ASSIGNED_CONTEXT_KINDS`."
+      },
+      "DayLoad": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "working_minutes": {
+            "type": "integer",
+            "title": "Working Minutes",
+            "default": 0
+          },
+          "meeting_minutes": {
+            "type": "integer",
+            "title": "Meeting Minutes",
+            "default": 0
+          },
+          "open_actions": {
+            "type": "integer",
+            "title": "Open Actions",
+            "default": 0
+          },
+          "overdue_actions": {
+            "type": "integer",
+            "title": "Overdue Actions",
+            "default": 0
+          },
+          "estimate_minutes": {
+            "type": "integer",
+            "title": "Estimate Minutes",
+            "default": 0
+          },
+          "actions_without_estimate": {
+            "type": "integer",
+            "title": "Actions Without Estimate",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "DayLoad",
+        "description": "One colleague's day, as numbers.\n\nA task falls on its due day; an overdue one on today, so a day before today carries no tasks.\n``meeting_minutes`` are busy minutes inside the day's working window, so a day off has none.\n``working_minutes`` are the organization's schedule for the day (zero on a day off), scaled by\nthe colleague's ``weekly_hours`` when the staff list has them. Leave is not subtracted."
       },
       "DecisionDetail": {
         "properties": {
@@ -8877,6 +9000,71 @@
         "title": "ParticipantRole",
         "description": "Somebody's part in the case, beyond the single owner."
       },
+      "PeopleLoadPage": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonLoad"
+            },
+            "type": "array",
+            "title": "People",
+            "default": []
+          },
+          "withheld": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Withheld",
+            "default": []
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today"
+        ],
+        "title": "PeopleLoadPage",
+        "description": "The colleagues answered for, in the order asked, and the ones left out.\n\n``withheld`` names every ``member_id`` asked for that is not answered: out of the person's\nreach (not them, not under them on the reporting line, and they do not hold\n``member.load.read_all``) or no active colleague here. The two are not told apart."
+      },
+      "PeopleLoadQuery": {
+        "properties": {
+          "member_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Member Ids"
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "member_ids",
+          "from",
+          "to"
+        ],
+        "title": "PeopleLoadQuery",
+        "description": "``POST /plugin/v1/people/load``: how loaded these colleagues are, day by day, as numbers.\n\nOnly on a person's handle, under ``people.load.read``. Colleagues by ``member_id`` (from\n``GET /org/members``), each named once; the days are the organization's, in its time zone, both\nends included."
+      },
       "PeoplePage": {
         "properties": {
           "items": {
@@ -8890,6 +9078,94 @@
         },
         "type": "object",
         "title": "PeoplePage"
+      },
+      "PersonLoad": {
+        "properties": {
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "has_calendar": {
+            "type": "boolean",
+            "title": "Has Calendar"
+          },
+          "open_actions": {
+            "type": "integer",
+            "title": "Open Actions",
+            "default": 0
+          },
+          "overdue_actions": {
+            "type": "integer",
+            "title": "Overdue Actions",
+            "default": 0
+          },
+          "actions_without_due_date": {
+            "type": "integer",
+            "title": "Actions Without Due Date",
+            "default": 0
+          },
+          "estimate_minutes": {
+            "type": "integer",
+            "title": "Estimate Minutes",
+            "default": 0
+          },
+          "actions_without_estimate": {
+            "type": "integer",
+            "title": "Actions Without Estimate",
+            "default": 0
+          },
+          "open_cases": {
+            "type": "integer",
+            "title": "Open Cases",
+            "default": 0
+          },
+          "cases_without_observer": {
+            "type": "integer",
+            "title": "Cases Without Observer",
+            "default": 0
+          },
+          "decisions_waiting": {
+            "type": "integer",
+            "title": "Decisions Waiting",
+            "default": 0
+          },
+          "decisions_waiting_since": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Decisions Waiting Since",
+            "default": []
+          },
+          "single_person_decisions": {
+            "type": "integer",
+            "title": "Single Person Decisions",
+            "default": 0
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayLoad"
+            },
+            "type": "array",
+            "title": "Days",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "member_id",
+          "user_id",
+          "has_calendar"
+        ],
+        "title": "PersonLoad",
+        "description": "One colleague's load (ADR-0095 decision 4). **Numbers only**: no title, no id of any record.\n\nThe totals are today's, whatever days were asked: every open task assigned to them, private\nones included, with ``actions_without_due_date`` counted on no day; the cases they own that are\nstill followed, and those no colleague but them reads (no observer, or private); the decisions\nwaiting on them as authority or approver -- ``decisions_waiting_since`` is the day each started\nwaiting, oldest first -- and the followed decisions naming nobody but them.\n\n``has_calendar`` is false for a colleague who does not sign in: they have no calendar of their\nown, so a plugin says so instead of showing an empty week. Events and meetings that name them\nstill count in ``meeting_minutes``."
       },
       "PlanPeriod": {
         "type": "string",
