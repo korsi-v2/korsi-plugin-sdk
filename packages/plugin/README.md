@@ -209,6 +209,21 @@ by its own key. A `people` decision names the colleague it is about in `about_us
 refuses one that would make them its owner, its decider or its addressee, and creates it at the
 normal level.
 
+**The staff list** (plugin API 1.5, ADR-0095). `listOrganizationMembers()` / `iterOrganizationMembers()`
+read `GET /org/members` under `structure.read`: each active colleague's `member_id`, `user_id` (how
+they appear everywhere else on the plane), `has_login`, name, `job_title`, the five unit levels,
+`manager_member_id` (the reporting line) and how they work here -- `employment_type` (`full_time`,
+`part_time`, `project`, `internship`), `employment_started_on`, `probation_ends_on`, `weekly_hours`
+and `leave_days_ahead` with `leave_as_of`. All five are optional: an empty probation is the start plus
+your default, empty hours are the organization's work schedule, and a leave count more than four
+weeks past `leave_as_of` is out of date. Never a personnel number, a place of work, or anything of a
+personnel file. Read it whole, keep it in memory for a few minutes, store none of it.
+
+```ts
+const colleagues = [];
+for await (const member of korsi.iterOrganizationMembers()) colleagues.push(member); // 500 a page
+```
+
 **Permissions.** `Caller.permissions` and `ToolCall.permissions` / `ActionCall.permissions` are the
 plugin's own permissions the person holds (ADR-0082), by their bare keys. Korsi enforces them where
 it shows the plugin's things; inside the plugin's routes the plugin does. A page's caller is reused

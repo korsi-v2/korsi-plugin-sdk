@@ -3,7 +3,7 @@
   "info": {
     "title": "Korsi plugin API",
     "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's five budgets -- reads,\nwrites, sources, proposals, models (:mod:`.limits`) -- before it opens a session, and past one it\nis answered ``429`` with ``Retry-After``.\n",
-    "version": "1.4"
+    "version": "1.5"
   },
   "paths": {
     "/plugin/v1/installation": {
@@ -1064,6 +1064,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OrganizationPersonPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "request.rate_limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin/v1/org/members": {
+      "get": {
+        "tags": [
+          "plugin",
+          "plugin: organization"
+        ],
+        "summary": "The organization's staff list: post, unit, manager line and how each works here",
+        "description": "Every active colleague, in the order the directory was built: name, post, the five levels of their unit, `manager_member_id` (the reporting line), and the five facts of how they work here (ADR-0095) -- employment type, start date, end of probation, weekly hours, and days of leave in the four weeks after `leave_as_of`. Never a personnel number, a place of work, or anything of a personnel file. Needs `structure.read`. Read it whole and keep it in memory for a few minutes; store none of it.",
+        "operationId": "list_organization_members_plugin_v1_org_members_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "From the previous page.",
+              "title": "Cursor"
+            },
+            "description": "From the previous page."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationMemberPage"
                 }
               }
             }
@@ -6328,6 +6409,17 @@
         "title": "DocumentText",
         "description": "``GET /plugin/v1/documents/{id}/text``: the text Korsi read out of it, as it reads now."
       },
+      "EmploymentType": {
+        "type": "string",
+        "enum": [
+          "full_time",
+          "part_time",
+          "project",
+          "internship"
+        ],
+        "title": "EmploymentType",
+        "description": "How somebody works here, as the staff list says (ADR-0095). Never a contract's legal kind."
+      },
       "EntryKind": {
         "type": "string",
         "enum": [
@@ -8447,6 +8539,214 @@
         "type": "object",
         "title": "Organization",
         "description": "``GET /plugin/v1/org``: the organization as it has recorded itself, and its chart.\n\nEvery field is empty until the organization records its profile -- a fresh organization has no\nlegal name yet, and that is an answer rather than an error."
+      },
+      "OrganizationMember": {
+        "properties": {
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "has_login": {
+            "type": "boolean",
+            "title": "Has Login"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "business_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Unit"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "division": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Division"
+          },
+          "group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          },
+          "team_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Name"
+          },
+          "manager_member_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager Member Id"
+          },
+          "employment_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "employment_started_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employment Started On"
+          },
+          "probation_ends_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probation Ends On"
+          },
+          "weekly_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Hours"
+          },
+          "leave_days_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Days Ahead"
+          },
+          "leave_as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave As Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "member_id",
+          "user_id",
+          "has_login"
+        ],
+        "title": "OrganizationMember",
+        "description": "A colleague as the organization's staff list records them (ADR-0095).\n\n``user_id`` is how the colleague appears everywhere else on this plane -- an owner, an assignee,\nthe colleague a decision is about -- and every member has one; ``has_login`` says whether they\nsign in to Korsi, because one who does not has no calendar. ``manager_member_id`` is the\nreporting line: the ``member_id`` of the colleague they report to, which may be somebody no\nlonger in the list.\n\nThe five facts of how they work here are all optional, and empty means \"not given\": no\nprobation date means the start plus the plugin's default, no hours mean the organization's work\nschedule. ``leave_days_ahead`` counts days of leave in the four weeks after ``leave_as_of``;\npast those four weeks the count is stale and counts as zero.\n\nNever here: the personnel number, the place of work, and anything of a personnel file -- a\nsalary, a national id, a birth date, an address. Korsi does not keep those at all."
+      },
+      "OrganizationMemberPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizationMember"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "title": "OrganizationMemberPage"
       },
       "OrganizationPerson": {
         "properties": {

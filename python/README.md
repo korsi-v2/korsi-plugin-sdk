@@ -175,7 +175,12 @@ each. A `decision.candidate` may carry the whole decision from plugin API 1.4 (`
 keyed `options`, `evidence`, `owner_id`, `decision_authority_id`, `target_decision_at`,
 `parent_decision_id`, and `about_user_id` for a `people` decision, never named on it); the answer's
 `result["options"]` and `get_decision()`'s `options[].key` and `outcome["chosen_option_key"]` give
-the choice back by the plugin's own key (ADR-0096). `Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
+the choice back by the plugin's own key (ADR-0096). From plugin API 1.5, `list_organization_members()`
+/ `iter_organization_members()` read the staff list (`GET /org/members`, `structure.read`,
+ADR-0095): each active colleague's ids, `has_login`, post, five unit levels, `manager_member_id`, and
+`employment_type`, `employment_started_on`, `probation_ends_on`, `weekly_hours`, `leave_days_ahead`
+with `leave_as_of` -- never a personnel number, a place of work or anything of a personnel file; keep
+it in memory, store none of it. `Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
 must reach the plugin at once.
 
 The sample plugin ([developers.korsi.ai/docs/example](https://developers.korsi.ai/docs/example))
