@@ -178,6 +178,11 @@ export interface DecidedProposal {
   case_id?: string | null;
   /** The decision saving it recorded, for a `decision.candidate`. Absent before plugin API 1.2. */
   decision_id?: string | null;
+  /**
+   * The key of the option its decider recorded in the same save, for a `decision.candidate` with
+   * options; null when it was accepted to be decided later. Absent before plugin API 1.4.
+   */
+  recorded_option_key?: string | null;
   /** Why applying it failed. */
   error_code: string | null;
 }

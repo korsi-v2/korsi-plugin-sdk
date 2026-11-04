@@ -197,6 +197,18 @@ open in Korsi's own forms through the Bridge's `openProposal`. A stage a `case.c
 keeps it: a slug matching `^[a-z][a-z0-9_]{1,39}$`, once in the list, which `case.stage.move` and
 `getCase()`'s `stages` name. A stage without a key gets one from Korsi.
 
+**A full decision** (plugin API 1.4, ADR-0096). A `decision.candidate` may carry the whole decision:
+`decision_type` (`people` for one about a colleague), `options` as `{key, title, description?, kind?,
+reversibility?}` with keys matching `^[a-z][a-z0-9_]{1,39}$`, `evidence` as `{statement, stance?,
+claim_kind?, option_key?, source_id?}`, `owner_id`, `decision_authority_id` (the decider),
+`target_decision_at` and `parent_decision_id`. With options, the person who accepts it gets a framed
+decision ready to take; when they are its decider, Korsi's record form opens on it and one save
+accepts and records it. The answer's `result.options` maps each key to its option, and
+`getDecision()` gives `options[].key` and `outcome.chosen_option_key`, so a plugin reads the choice
+by its own key. A `people` decision names the colleague it is about in `about_user_id` only: Korsi
+refuses one that would make them its owner, its decider or its addressee, and creates it at the
+normal level.
+
 **Permissions.** `Caller.permissions` and `ToolCall.permissions` / `ActionCall.permissions` are the
 plugin's own permissions the person holds (ADR-0082), by their bare keys. Korsi enforces them where
 it shows the plugin's things; inside the plugin's routes the plugin does. A page's caller is reused
