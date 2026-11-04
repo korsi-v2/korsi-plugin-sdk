@@ -3,7 +3,7 @@
   "info": {
     "title": "Korsi plugin API",
     "description": "``/plugin/v1`` -- the plugin plane: what an installed plugin calls (section 9).\n\n**Its own plane, with its own contract.** ``/api/v1`` changes with every release of the web app and\nis not a promise to anybody outside this repository; this plane is versioned, documented in its own\nOpenAPI (``/plugin/v1/openapi.json``) and kept compatible for a major version. It is also the only\nplace a plugin can write: its own records, its proposals, its sources and its wallet.\n\n**The organization's data is here too** (:mod:`.data`, ADR-0062): its structure, cases, actions,\ndecisions, meetings, documents, calendar and memory, read through the domains' own reads with the\nplugin's principal -- so an organization's plugin reads what the organization lets a plugin read,\nand a plugin on a person's behalf reads no more than that person. Korsi's MCP server serves the\nsame reads as tools, with the same credential, for a plugin that thinks in tools.\n\n**Who is calling** is :mod:`.calling`'s.\n\n**Budgets.** Every route spends one request from one of the installation's five budgets -- reads,\nwrites, sources, proposals, models (:mod:`.limits`) -- before it opens a session, and past one it\nis answered ``429`` with ``Retry-After``.\n",
-    "version": "1.6"
+    "version": "1.7"
   },
   "paths": {
     "/plugin/v1/installation": {
@@ -5860,6 +5860,14 @@
             "type": "boolean",
             "title": "Has Restricted Content",
             "default": false
+          },
+          "follow_ups": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionFollowUpRead"
+            },
+            "type": "array",
+            "title": "Follow Ups",
+            "default": []
           }
         },
         "type": "object",
@@ -5897,6 +5905,70 @@
         ],
         "title": "DecisionExecutionState",
         "description": "Whether the choice has actually been carried out.\n\nSeparate from :class:`DecisionState` because the two fail independently: a decision can\nbe recorded and never executed, which is one of the most useful signals the register\nproduces."
+      },
+      "DecisionFollowUpRead": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "option_key": {
+            "type": "string",
+            "title": "Option Key"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "option_key",
+          "type",
+          "state"
+        ],
+        "title": "DecisionFollowUpRead",
+        "description": "One follow-up of a decision the reading plugin proposed, and where it stands (ADR-0096).\n\n``result`` is what it made once applied: ``action_id``, ``case_id`` (an onboarding case the\nplugin files its record under), ``member_id`` and ``user_id`` (the new colleague)."
       },
       "DecisionItem": {
         "properties": {
@@ -9676,7 +9748,8 @@
           "calendar.event.create",
           "memory.finding",
           "case.create",
-          "case.stage.move"
+          "case.stage.move",
+          "member.create"
         ],
         "title": "ProposalType",
         "description": "What a plugin may propose into Korsi's own records (section 11)."

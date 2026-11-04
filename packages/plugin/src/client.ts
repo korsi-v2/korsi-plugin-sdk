@@ -67,7 +67,7 @@ export const TEXT_WAIT_MS = 600_000;
 /** The plane's version, sent by Korsi on every response. */
 export const VERSION_HEADER = 'Korsi-Plugin-API';
 /** The plugin API this SDK was generated for. */
-export const PLUGIN_API = '1.6';
+export const PLUGIN_API = '1.7';
 
 /** Korsi's codes for a status, when something in front of Korsi answered without a problem. */
 const STATUS_CODES: Record<number, string> = {

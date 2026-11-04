@@ -242,6 +242,30 @@ line and, when they hold Korsi's `member.load.read_all`, everybody; anybody else
 const load = await plugin.client(installation, handle).peopleLoad({ member_ids: team, from: '2026-11-07', to: '2026-12-04' });
 ```
 
+**A decision's follow-ups** (plugin API 1.7, ADR-0096). A full `decision.candidate` may say what each
+option starts once the decision is recorded with it: `follow_ups: [{key, option_key, proposal: {type,
+payload}}]`, up to 20, with `type` one of `action.create`, `case.create` and `member.create` (a new
+colleague without a login: `given_name`, `family_name`, `job_title`, `business_unit`, `department`,
+`team_name`, `manager_id` as a user id, `employment_type`, `employment_started_on`,
+`probation_ends_on`; under the new `proposals.member` scope, and never proposed alone). Each type must
+be one the manifest declares and was granted. A later follow-up of the same option names what an
+earlier one made: `{"$member": "<key>"}` as an assignee, owner, participant or observer, and
+`{"$case": "<key>"}` as an `action.create`'s `case_id`, the case it is filed under. The decider sees
+them ticked under the option in Korsi's record form and unticks what should not happen; recording
+applies the chosen option's ticked ones in order, each on the decider's authority, and a refused one
+undoes nothing else. `getDecision()` gives `follow_ups[]` -- `key`, `state` (`waiting`, `applied`,
+`failed`, `skipped`, `not_chosen`), `proposal_id`, `result` (`action_id`, `case_id`, `member_id` and
+`user_id`) and `error_code` -- and each applied one settles as a proposal whose `external_id` is the
+candidate's followed by `#<key>`.
+
+**Cases with observers and planned work** (plugin API 1.7, ADR-0096). A `case.create` may carry
+`observers` (user ids who read the case and change nothing), and its stages may carry `actions`: the
+work each plans, in a template stage's shape (`title`, `assignee_rule`, `assignee_id`, `due_in_days`,
+`priority`, `required`, `checklist`, `estimate_minutes`; up to 10), created when the case reaches the
+stage. A stage that plans work has a key. Only a follow-up names another `owner_id`. The work created
+together reaches the case's owner as one context card. `case.change` takes `change_case_owner`,
+which only the case's current owner decides.
+
 **Permissions.** `Caller.permissions` and `ToolCall.permissions` / `ActionCall.permissions` are the
 plugin's own permissions the person holds (ADR-0082), by their bare keys. Korsi enforces them where
 it shows the plugin's things; inside the plugin's routes the plugin does. A page's caller is reused

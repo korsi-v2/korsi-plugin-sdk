@@ -184,7 +184,14 @@ it in memory, store none of it. From plugin API 1.6, `people_load()` asks collea
 (`POST /people/load`, `people.load.read`, on a person's handle only, ADR-0095): up to 200 colleagues
 and 35 days, numbers only -- tasks, estimates, meeting minutes inside working hours, working minutes,
 cases owned and unobserved, decisions waiting and single-person -- never a title; anybody outside the
-person's reporting line (or everybody, with Korsi's `member.load.read_all`) is in `withheld`.
+person's reporting line (or everybody, with Korsi's `member.load.read_all`) is in `withheld`. From
+plugin API 1.7 (ADR-0096), a full `decision.candidate` carries `follow_ups` per option --
+`action.create`, `case.create` and `member.create` (a new colleague without a login, under
+`proposals.member`) -- naming an earlier follow-up's colleague as `{"$member": key}` and case as
+`{"$case": key}`; recording the decision applies the chosen option's ticked ones, and
+`get_decision()` gives `follow_ups[]` with each one's `state` and `result`. A `case.create` takes
+`observers` and planned work on its stages, and `case.change` takes `change_case_owner`, decided by
+the case's owner alone.
 `Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
 must reach the plugin at once.
 

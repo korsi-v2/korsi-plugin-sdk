@@ -522,6 +522,7 @@
         "proposals.decision",
         "proposals.calendar",
         "proposals.memory",
+        "proposals.member",
         "sources.intake.message",
         "sources.intake.document",
         "sources.read.message",
@@ -557,7 +558,8 @@
         "calendar.event.create",
         "memory.finding",
         "case.create",
-        "case.stage.move"
+        "case.stage.move",
+        "member.create"
       ],
       "title": "ProposalType",
       "type": "string"
