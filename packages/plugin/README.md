@@ -226,6 +226,62 @@ const colleagues = [];
 for await (const member of korsi.iterOrganizationMembers()) colleagues.push(member); // 500 a page
 ```
 
+**Colleagues' load** (plugin API 1.6, ADR-0095). `peopleLoad({ member_ids, from, to })` asks
+`POST /people/load` under `people.load.read`, **on a person's handle only** (`plugin.client(installation, handle)`; the plugin
+acting as itself gets `403 plugin.personal_needs_person`). Up to 200 colleagues by `member_id`, up to
+35 of the organization's days. For each colleague answered: open, overdue and undated tasks, their
+estimated minutes and how many carry none, the cases they own and those nobody else reads
+(`cases_without_observer`), the decisions waiting on them with the day each started waiting
+(`decisions_waiting_since`, oldest first) and those naming nobody but them; and per day the
+`working_minutes` (the organization's schedule scaled by `weekly_hours`, zero on a day off),
+`meeting_minutes` inside working hours, and the tasks falling on it (an overdue task falls on
+`today`). `has_calendar` is false for a colleague who does not sign in. **Numbers only, never a
+title**; private work is counted. Korsi answers for the person, everybody under them on the reporting
+line and, when they hold Korsi's `member.load.read_all`, everybody; anybody else asked for is in
+`withheld`. The order is the order asked: never sort people by load.
+
+```ts
+const load = await plugin.client(installation, handle).peopleLoad({ member_ids: team, from: '2026-11-07', to: '2026-12-04' });
+```
+
+**A decision's follow-ups** (plugin API 1.7, ADR-0096). A full `decision.candidate` may say what each
+option starts once the decision is recorded with it: `follow_ups: [{key, option_key, proposal: {type,
+payload}}]`, up to 20, with `type` one of `action.create`, `case.create` and `member.create` (a new
+colleague without a login: `given_name`, `family_name`, `job_title`, `business_unit`, `department`,
+`team_name`, `manager_id` as a user id, `employment_type`, `employment_started_on`,
+`probation_ends_on`; under the new `proposals.member` scope, and never proposed alone). Each type must
+be one the manifest declares and was granted. A later follow-up of the same option names what an
+earlier one made: `{"$member": "<key>"}` as an assignee, owner, participant or observer, and
+`{"$case": "<key>"}` as an `action.create`'s `case_id`, the case it is filed under. The decider sees
+them ticked under the option in Korsi's record form and unticks what should not happen; recording
+applies the chosen option's ticked ones in order, each on the decider's authority, and a refused one
+undoes nothing else. `getDecision()` gives `follow_ups[]` -- `key`, `state` (`waiting`, `applied`,
+`failed`, `skipped`, `not_chosen`), `proposal_id`, `result` (`action_id`, `case_id`, `member_id` and
+`user_id`) and `error_code` -- and each applied one settles as a proposal whose `external_id` is the
+candidate's followed by `#<key>`.
+
+**Cases with observers and planned work** (plugin API 1.7, ADR-0096). A `case.create` may carry
+`observers` (user ids who read the case and change nothing), and its stages may carry `actions`: the
+work each plans, in a template stage's shape (`title`, `assignee_rule`, `assignee_id`, `due_in_days`,
+`priority`, `required`, `checklist`, `estimate_minutes`; up to 10), created when the case reaches the
+stage. A stage that plans work has a key. Only a follow-up names another `owner_id`. The work created
+together reaches the case's owner as one context card. `case.change` takes `change_case_owner`,
+which only the case's current owner decides.
+
+**A person's own single-person risk** (plugin API 1.9). `singlePersonRisk()` on a person's handle
+(`people.load.read`) lists, for that person alone, the rows behind their own `cases_without_observer`
+and `single_person_decisions`: the followed cases they own that no colleague but them reads, and the
+followed decisions naming only them, with titles -- their handover list. Anybody else's are numbers
+only, from `peopleLoad`.
+
+**One card from your page** (plugin API 1.9). `putCard({ title, changes })` on a person's handle puts
+up to ten proposals -- each `{ key, summary, after?, type, addressed_to, payload }`, addressed to that
+person or to a case they read -- on their desk in «آماده برای شما» as one card from your plugin: they
+untick any and confirm the rest with one press. Each proposal on a confirmed card settles as
+`card:<card_id>:<key>`; `getCard(cardId)` tells the card's `status` (`pending`, `applied`, `failed`,
+`rejected`) and what became of each change. At most 30 cards wait on one desk
+(`plugin.cards_waiting`).
+
 **Permissions.** `Caller.permissions` and `ToolCall.permissions` / `ActionCall.permissions` are the
 plugin's own permissions the person holds (ADR-0082), by their bare keys. Korsi enforces them where
 it shows the plugin's things; inside the plugin's routes the plugin does. A page's caller is reused
@@ -235,3 +291,36 @@ that matters.
 **Through Korsyar.** Korsyar's `korsi_meeting_get` gives a plugin a meeting without its words
 (`transcript_withheld`) unless the plugin holds `meetings.transcript.read` and, for a restricted
 meeting, hosts it; `korsi_analysis_text` needs `meetings.transcript.read` too.
+
+
+## Feeds: the organization's own systems writing your records (plugin API 1.8)
+
+A plugin may declare up to five **inbound feeds** (ADR-0097): a shape an organization's ticket
+system, ERP or script writes into the plugin's own records through Korsi's machine door. The plugin
+never talks to that system and stays `egress: none`; installing it grants nothing -- the
+organization grants the feed to one of its system connections.
+
+```ts
+import { checkFeeds, defineFeed } from '@korsi/plugin';
+
+const tickets = defineFeed('tickets', {
+  names: { en: 'Tickets' },
+  consent: { en: 'Tickets from your ticket system, read by everybody in the organization.' },
+  recordType: 'ticket', // one of your record types: organization or case_members
+  sourceKey: 'ticket_no', // the system's own id: the record's external_id
+  fields: ['title', 'status', 'assignee'],
+  personFields: { assignee: ['email', 'personnel_number'] }, // stored as the member id
+  onMissing: 'mark',
+});
+const problems = checkFeeds({ ...manifest, feeds: [tickets] });
+```
+
+Each applied run puts one `plugin.feed.run` event in your stream (`feed`, `run_id`, `counts`,
+`complete`, `missing`; never rows), and its records carry `written_by: "connection:<id>"` and, when
+a complete run lacked them, `fed_missing_at`. The staff list gives each colleague's
+`employment_status`, `status_since` and `source_updated_at`.
+
+**The door, for an organization's IT.** `SystemClient`, `push`, `readRows` and `checkRows` talk to
+`/system/v1` with a connection's client credentials, and `korsi-feed` (this package's bin) is the
+same commands as the Python one -- `whoami`, `schema`, `check`, `push [--dry-run] [--complete]`,
+`status`, `apply` -- reading CSV, JSON and JSON lines, the credential from `KORSI_SYSTEM_*`.

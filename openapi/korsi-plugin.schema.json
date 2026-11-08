@@ -246,6 +246,142 @@
       "title": "ExtensionPoint",
       "type": "string"
     },
+    "FeedMatch": {
+      "description": "How a person field of a fed row finds its colleague, in the order a feed lists them\n(ADR-0097 clause 5). A name alone never does.",
+      "enum": [
+        "source_key",
+        "personnel_number",
+        "email"
+      ],
+      "title": "FeedMatch",
+      "type": "string"
+    },
+    "FeedOnMissing": {
+      "description": "What a complete run does to the records of this feed whose key it did not carry. Never a\ndeletion: ``mark`` sets the record's ``fed_missing_at``, ``keep`` leaves it as it is.",
+      "enum": [
+        "keep",
+        "mark"
+      ],
+      "title": "FeedOnMissing",
+      "type": "string"
+    },
+    "FeedPersonField": {
+      "additionalProperties": false,
+      "description": "A field of the row that names a colleague. Korsi resolves it by its matching rule and the\nrecord holds the colleague's ``member_id``; a row whose colleague is not found waits for a\nperson on the connections page.",
+      "properties": {
+        "field": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+          "title": "Field",
+          "type": "string"
+        },
+        "match": {
+          "items": {
+            "$ref": "#/$defs/FeedMatch"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Match",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field",
+        "match"
+      ],
+      "title": "FeedPersonField",
+      "type": "object"
+    },
+    "FeedSpec": {
+      "additionalProperties": false,
+      "description": "An inbound feed the plugin declares (ADR-0097 clause 3).\n\nAn organization's own system -- its ticket system, its ERP -- writes rows of this shape\nthrough Korsi's door, and each row becomes one of the plugin's records of ``record_type``,\nkeyed by ``source_key``. The plugin never talks to the system and stays ``egress: none``;\nKorsi tells it a run was applied with ``plugin.feed.run``. Installing the plugin grants no\nsystem the feed: the organization grants it to a connection on its «سامانه‌های سازمان» page.",
+      "properties": {
+        "key": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "consent": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "record_type": {
+          "title": "Record Type",
+          "type": "string"
+        },
+        "source_key": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+          "title": "Source Key",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Fields",
+          "type": "array"
+        },
+        "person_fields": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FeedPersonField"
+          },
+          "maxItems": 5,
+          "title": "Person Fields",
+          "type": "array"
+        },
+        "upsert": {
+          "$ref": "#/$defs/FeedUpsert",
+          "default": "merge"
+        },
+        "on_missing": {
+          "$ref": "#/$defs/FeedOnMissing",
+          "default": "keep"
+        },
+        "max_rows": {
+          "default": 5000,
+          "maximum": 50000,
+          "minimum": 1,
+          "title": "Max Rows",
+          "type": "integer"
+        },
+        "headers": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "title": "Headers",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "names",
+        "consent",
+        "record_type",
+        "source_key",
+        "fields"
+      ],
+      "title": "FeedSpec",
+      "type": "object"
+    },
+    "FeedUpsert": {
+      "description": "What a row does to a record that already exists. ``merge``: a field the row leaves out or\nsends empty keeps its value. ``replace``: the feed's fields are what the row says, and one it\nleaves out is cleared; properties the feed does not carry are the plugin's and stay.",
+      "enum": [
+        "merge",
+        "replace"
+      ],
+      "title": "FeedUpsert",
+      "type": "string"
+    },
     "FieldSpec": {
       "additionalProperties": false,
       "description": "A top-level property of a record type that Korsi keeps beside the record to filter and\norder by (ADR-0085). Checked against the type's schema when the manifest is read.\n\nA keyword's property bounds its length: a ``maxLength`` of at most 500, or an ``enum`` of\nstrings no longer than that.",
@@ -505,6 +641,7 @@
       "enum": [
         "people.read",
         "structure.read",
+        "people.load.read",
         "cases.read",
         "actions.read",
         "decisions.read",
@@ -521,6 +658,7 @@
         "proposals.decision",
         "proposals.calendar",
         "proposals.memory",
+        "proposals.member",
         "sources.intake.message",
         "sources.intake.document",
         "sources.read.message",
@@ -556,7 +694,8 @@
         "calendar.event.create",
         "memory.finding",
         "case.create",
-        "case.stage.move"
+        "case.stage.move",
+        "member.create"
       ],
       "title": "ProposalType",
       "type": "string"
@@ -1211,6 +1350,15 @@
       },
       "maxItems": 4,
       "title": "Connections",
+      "type": "array"
+    },
+    "feeds": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FeedSpec"
+      },
+      "maxItems": 5,
+      "title": "Feeds",
       "type": "array"
     },
     "services": {

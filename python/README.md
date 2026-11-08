@@ -181,10 +181,78 @@ the choice back by the plugin's own key (ADR-0096). From plugin API 1.5, `list_o
 ADR-0095): each active colleague's ids, `has_login`, post, five unit levels, `manager_member_id`, and
 `employment_type`, `employment_started_on`, `probation_ends_on`, `weekly_hours`, `leave_days_ahead`
 with `leave_as_of` -- never a personnel number, a place of work or anything of a personnel file; keep
-it in memory, store none of it. `Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
+it in memory, store none of it. From plugin API 1.6, `people_load()` asks colleagues' load
+(`POST /people/load`, `people.load.read`, on a person's handle only, ADR-0095): up to 200 colleagues
+and 35 days, numbers only -- tasks, estimates, meeting minutes inside working hours, working minutes,
+cases owned and unobserved, decisions waiting and single-person -- never a title; anybody outside the
+person's reporting line (or everybody, with Korsi's `member.load.read_all`) is in `withheld`. From
+plugin API 1.7 (ADR-0096), a full `decision.candidate` carries `follow_ups` per option --
+`action.create`, `case.create` and `member.create` (a new colleague without a login, under
+`proposals.member`) -- naming an earlier follow-up's colleague as `{"$member": key}` and case as
+`{"$case": key}`; recording the decision applies the chosen option's ticked ones, and
+`get_decision()` gives `follow_ups[]` with each one's `state` and `result`. A `case.create` takes
+`observers` and planned work on its stages, and `case.change` takes `change_case_owner`, decided by
+the case's owner alone. From plugin API 1.9, `single_person_risk()` on a person's handle lists
+that person's own unobserved cases and single-person decisions with titles (theirs alone), and
+`put_card(...)` puts up to ten proposals on their desk as one card they confirm with one press,
+read back with `get_card(card_id)`; each proposal on it settles as `card:<card_id>:<key>`.
+`Caller.permissions` is reused for `handle_cache_seconds` (60): set it lower where a revoke
 must reach the plugin at once.
 
 The sample plugin ([developers.korsi.ai/docs/example](https://developers.korsi.ai/docs/example))
 uses all of it with FastAPI; the guide is at
 [developers.korsi.ai/docs/guide](https://developers.korsi.ai/docs/guide). Installing it from GitHub
 is in the [repository's README](../README.md#getting-it).
+
+
+## Feeds: the organization's own systems writing your records (plugin API 1.8)
+
+A plugin may declare up to five **inbound feeds** (ADR-0097): a shape an organization's ticket
+system, ERP or script writes into the plugin's own records through Korsi's machine door. The plugin
+never talks to that system and stays `egress: none`; installing it grants no system anything -- the
+organization grants the feed to one of its system connections on «سامانه‌های سازمان».
+
+```python
+from korsi_plugin.feeds import check_feeds, define_feed
+
+feed = define_feed(
+    "tickets",
+    names={"fa": "تیکت‌ها", "en": "Tickets"},
+    consent={"en": "Tickets from your ticket system, read by everybody in the organization."},
+    record_type="ticket",            # one of your record types: organization or case_members
+    source_key="ticket_no",          # the system's own id: the record's external_id
+    fields=["title", "status", "assignee"],
+    person_fields={"assignee": ["email", "personnel_number"]},  # stored as the member id
+    on_missing="mark",               # a complete run marks what it lacked: fed_missing_at
+)
+problems = check_feeds({**manifest, "feeds": [feed]})  # what Korsi would refuse, before it does
+```
+
+`merge` (the default) keeps a field a row leaves out or sends empty; `replace` clears the feed's
+fields it leaves out; your own properties stay either way. A row whose colleague is not found waits
+for a person on the connections page. A new feed, or one that carries more, asks the organization
+for consent again. Each applied run puts one `plugin.feed.run` event in your stream -- `feed`,
+`run_id`, `counts`, `complete`, `missing`, never rows -- and the records it wrote carry
+`written_by = "connection:<id>"`. The staff list's `list_organization_members()` now gives each
+colleague's `employment_status` (`active`, `long_leave`, `left`), `status_since` and
+`source_updated_at`, as the organization's personnel system said: display only, never a change of
+anybody's access.
+
+**The door, for an organization's IT.** `SystemClient` (`/system/v1`, a system connection's client
+id and secret, `grant_type=client_credentials`), `push()`, `read_rows()` and `check_rows()` are in
+`korsi_plugin.feeds`, and the `korsi-feed` command is all of it on a command line
+(`pip install "korsi-plugin[xlsx]"` to read `.xlsx`):
+
+```bash
+export KORSI_SYSTEM_CLIENT_ID=... KORSI_SYSTEM_CLIENT_SECRET=...   # never in a committed file
+export KORSI_SYSTEM_TOKEN_ENDPOINT=... KORSI_SYSTEM_SCOPE=... KORSI_SYSTEM_API=https://<korsi>/system/v1
+korsi-feed schema korsi.people -o people.json
+korsi-feed check staff.xlsx --feed korsi.people --schema people.json   # offline
+korsi-feed push staff.xlsx --feed korsi.people --dry-run               # report only
+korsi-feed apply <run id> --feed korsi.people                          # your own dry run
+korsi-feed push staff.xlsx --feed korsi.people --complete              # the whole list, nightly
+```
+
+Exit codes: 0 done, 2 held for the connection's owner (a large change), 3 rows wait or were refused,
+4 the file has rows Korsi would refuse, 1 anything else. The same rows again are the same run (the
+key follows the rows), so a retried job writes once.

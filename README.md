@@ -11,6 +11,12 @@ signature check, its lifecycle rules or its Bridge again — and gets one of the
 | [`@korsi/plugin-ui`](packages/plugin-ui) | the plugin's pages, any framework | Korsi's theme as CSS variables; Korsi's typefaces; dates and digits as the organization writes them (Jalali, Persian digits) through `Intl`; `mountKorsiPage` |
 | [`@korsi/plugin-react`](packages/plugin-react) | React pages | `KorsiProvider`, `useKorsi`, `useHandle`, `usePluginApi`, `useKorsiFormat`, `usePluginData`, `useMessages`, `usePickFile`, `useMeetingLive`; in MUI (`@korsi/plugin-react/mui`) the page frame `KorsiPage`, `createKorsiTheme`, and `Label`, `StatCard`, `EmptyState`, `NameAvatar` |
 
+**For an organization's IT** (not a plugin): `korsi-feed`, in both server packages, pushes a CSV,
+JSON or (Python) XLSX file to one of the organization's feeds through Korsi's machine door,
+`/system/v1`, with a system connection's client credentials from `KORSI_SYSTEM_*` -- `check` it
+offline, `push --dry-run`, `apply`, then schedule `push --complete` (ADR-0097; the guide is Korsi's
+`docs/integrations/organization-systems-it-guide-fa.md`).
+
 The developer guide — Persian first, and English — is on the developer portal,
 [developers.korsi.ai](https://developers.korsi.ai/docs/guide) (and in Korsi's own documentation,
 `docs/plugins/README-fa.md`). The sample plugin, *email commitments*

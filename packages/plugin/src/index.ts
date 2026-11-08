@@ -7,7 +7,10 @@
  * - `Manifest` -- the manifest's types (`korsi-plugin.yaml`), from Korsi's published schema;
  * - `verifySignature` -- `Korsi-Signature`, for a server that wants only that;
  * - `Wallet` and `KorsiClient.reserve` -- MU, exactly, and reserve-then-settle;
- * - `createKorsiFetch` -- the `fetch` the SDK reaches Korsi with, through the egress proxy.
+ * - `createKorsiFetch` -- the `fetch` the SDK reaches Korsi with, through the egress proxy;
+ * - feeds (ADR-0097) -- `defineFeed` and `checkFeeds` for a manifest's inbound feeds, and
+ *   `SystemClient`, `push`, `readRows` and `checkRows` for an organization's system writing one
+ *   through Korsi's machine door, `/system/v1` (the `korsi-feed` command).
  */
 export {
   callerOf,
@@ -120,3 +123,42 @@ export {
   Wallet,
   type Quantity,
 } from './wallet.js';
+export {
+  BATCH_MAX_BYTES,
+  BATCH_MAX_ROWS,
+  batches,
+  checkFeeds,
+  checkRows,
+  credentialsFromEnv,
+  defineFeed,
+  ENV as FEED_ENV,
+  headerIndex,
+  parseCsv,
+  PEOPLE_FEED,
+  push,
+  readRows,
+  runKey,
+  SYSTEM_API,
+  SYSTEM_VERSION_HEADER,
+  SystemClient,
+  type BatchReceipt,
+  type ConnectionMode,
+  type DefineFeed,
+  type FedRow,
+  type FedRowResult,
+  type FeedCounts,
+  type FeedGrant,
+  type FeedRowOutcome,
+  type FeedRunReport,
+  type FeedRunView,
+  type FeedSchema,
+  type PushResult,
+  type ReadRows,
+  type Row as FeedRow,
+  type RowProblem,
+  type RowStatus,
+  type RunStatus,
+  type SystemClientOptions,
+  type SystemCredentials,
+  type SystemSelf,
+} from './feeds.js';
