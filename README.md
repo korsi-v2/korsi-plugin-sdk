@@ -114,6 +114,26 @@ which both SDKs follow by themselves.
 - **Keep nothing on disk.** Installations live in memory, everything durable in the plugin's
   records.
 
+## Publishing, and the store page
+
+Releasing a plugin is not this SDK's: it goes through Korsi's publisher API (`/developer/v1`, a
+publisher key as `Authorization: Bearer kp_…`), from the developer portal
+([developers.korsi.ai](https://developers.korsi.ai)) or from your own CI
+([developers.korsi.ai/docs/api](https://developers.korsi.ai/docs/api)). A release is its manifest,
+reviewed and signed by Korsi. What every organization's store shows *around* it is not in the
+manifest, is not reviewed, and is changed at any time (ADR-0099) -- so none of it is a field of
+`korsi-plugin.yaml`, and `openapi/korsi-plugin.schema.json` does not carry it:
+
+| What | Where |
+|---|---|
+| A one-line promise, a category, plain answers to five questions (`does`, `data`, `touches`, `who`, `cost`), up to 12 things it does | `PUT /developer/v1/plugins/{plugin_id}/listing` |
+| One video up to 3 minutes with Persian subtitles (WebVTT), 3 to 8 screenshots at 16:9 -- uploaded to Korsi, never a link | `PUT /developer/v1/plugins/{plugin_id}/media?kind=video\|screenshot\|subtitles` (the file as the body), `DELETE /developer/v1/media/{id}` |
+| What is new in a version, a line each | `release_notes` on `POST /developer/v1/releases`, or later `PUT /developer/v1/releases/{plugin_id}/{version}/notes` |
+| The publisher's bio, website, contact and logo | `PUT /developer/v1/profile`, `PUT /developer/v1/profile/logo` |
+| Reviews of your plugins, your one reply to each, a report for abuse | `GET /developer/v1/reviews`, `PUT`/`DELETE /developer/v1/reviews/{id}/reply`, `POST /developer/v1/reviews/{id}/report` |
+
+A review reaches the publisher with the author's role and kind of business, never the organization.
+
 ## Working on it
 
 ```bash
