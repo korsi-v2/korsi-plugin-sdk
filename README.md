@@ -121,7 +121,7 @@ publisher key as `Authorization: Bearer kp_…`), from the developer portal
 ([developers.korsi.ai](https://developers.korsi.ai)) or from your own CI
 ([developers.korsi.ai/docs/api](https://developers.korsi.ai/docs/api)). A release is its manifest,
 reviewed and signed by Korsi. What every organization's store shows *around* it is not in the
-manifest, is not reviewed, and is changed at any time (ADR-0099) -- so none of it is a field of
+manifest, is not reviewed, and is changed at any time (ADR-0102) -- so none of it is a field of
 `korsi-plugin.yaml`, and `openapi/korsi-plugin.schema.json` does not carry it:
 
 | What | Where |
