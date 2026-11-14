@@ -5908,6 +5908,18 @@
               }
             ],
             "title": "Avatar Url"
+          },
+          "has_access": {
+            "type": "boolean",
+            "title": "Has Access",
+            "description": "Whether this colleague has a Korsi account to sign in with.",
+            "default": true
+          },
+          "signed_in": {
+            "type": "boolean",
+            "title": "Signed In",
+            "description": "Whether this colleague has ever signed in to Korsi.",
+            "default": true
           }
         },
         "type": "object",
@@ -10962,18 +10974,6 @@
               }
             ],
             "title": "Decided By"
-          },
-          "decided_by_rule": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided By Rule"
           },
           "decided_at": {
             "anyOf": [

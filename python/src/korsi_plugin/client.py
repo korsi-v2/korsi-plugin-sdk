@@ -393,8 +393,9 @@ class KorsiClient(PlaneOperations):
     # -- into Korsi's own records: proposals and sources -------------------------------------------
 
     async def propose(self, proposal: SubmitProposal) -> ProposalView:
-        """Propose a change to one of Korsi's records. A person -- or the organization's rule for
-        a low-risk type -- applies it; the verdict comes back as ``plugin.proposal.settled``."""
+        """Propose a change to one of Korsi's records. The person it is addressed to applies it --
+        no rule does it for them (ADR-0109); the verdict comes back as
+        ``plugin.proposal.settled``."""
         return cast(ProposalView, await self._call("POST", "/proposals", json=dict(proposal)))
 
     async def proposals(self) -> list[ProposalView]:

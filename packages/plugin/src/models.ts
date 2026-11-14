@@ -338,6 +338,10 @@ export interface Colleague {
   email: string | null;
   status: MembershipStatus;
   avatar_url: string | null;
+  /** Whether this colleague has a Korsi account to sign in with. */
+  has_access: boolean;
+  /** Whether this colleague has ever signed in to Korsi. */
+  signed_in: boolean;
 }
 
 export interface CompletionUsage {
@@ -1119,7 +1123,6 @@ export interface ProposalView {
   result: Record<string, unknown> | null;
   error_code: string | null;
   decided_by: string | null;
-  decided_by_rule: string | null;
   decided_at: string | null;
   reason: string | null;
   created_at: string;

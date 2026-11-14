@@ -418,8 +418,8 @@ export class KorsiClient extends PlaneOperations {
   // -- into Korsi's own records: proposals and sources --------------------------------------------
 
   /**
-   * Propose a change to one of Korsi's records. A person -- or the organization's rule for a
-   * low-risk type -- applies it; the verdict comes back as `plugin.proposal.settled`.
+   * Propose a change to one of Korsi's records. The person it is addressed to applies it -- no
+   * rule does it for them (ADR-0109); the verdict comes back as `plugin.proposal.settled`.
    */
   propose(proposal: SubmitProposal): Promise<ProposalView> {
     return this.call('POST', '/proposals', { json: proposal });

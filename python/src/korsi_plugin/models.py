@@ -358,6 +358,10 @@ class Colleague(TypedDict):
     email: str | None
     status: MembershipStatus
     avatar_url: str | None
+    #: Whether this colleague has a Korsi account to sign in with.
+    has_access: bool
+    #: Whether this colleague has ever signed in to Korsi.
+    signed_in: bool
 
 
 class CompletionUsage(TypedDict):
@@ -1178,7 +1182,6 @@ class ProposalView(TypedDict):
     result: dict[str, Any] | None
     error_code: str | None
     decided_by: str | None
-    decided_by_rule: str | None
     decided_at: str | None
     reason: str | None
     created_at: str
