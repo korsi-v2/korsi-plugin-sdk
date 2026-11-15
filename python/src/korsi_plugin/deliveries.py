@@ -45,6 +45,12 @@ ACTION_DEADLINE_SECONDS: Final = 30
 VERIFY: Final = "connection.verify"
 SYNC: Final = "connection.sync"
 CALENDAR: Final = "connection.calendar"
+#: Signing a person in at the provider (plugin API 1.10, ADR-0111): ``op`` ``start`` answers
+#: ``{"authorization_url"}``; ``op`` ``finish`` answers ``{"account", "secrets"}``.
+SIGN_IN: Final = "connection.sign_in"
+#: The secretary sending something out through one of the connection's outputs (1.10, ADR-0111):
+#: answer ``{"ok": true, "reference"}``, the same on every attempt of one ``delivery_id``.
+OUTPUT: Final = "connection.output"
 
 
 class Topic:
@@ -368,6 +374,11 @@ class ActionCall:
         )
 
 
+def _optional_text(payload: Mapping[str, Any], key: str) -> str | None:
+    value = payload.get(key)
+    return None if value is None else str(value)
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectionCall:
     """Korsi asking about one person's connection (ADR-0067).
@@ -375,8 +386,12 @@ class ConnectionCall:
     ``call`` is :data:`VERIFY` (are these credentials an account? answer ``{"ok": true, "account":
     {"subject", "label", "address", "host"}}`` or ``{"ok": false, "error": {"code":
     "auth_failed", "message"}}``), :data:`SYNC` (what changed since ``state``? answer
-    ``{"changes", "state", "more", "skipped"}``) or :data:`CALENDAR` (``op`` with ``args``; answer
-    ``{"result"}``). The shapes are published as ``korsi-connection-calls.schema.json``.
+    ``{"changes", "state", "more", "skipped"}``), :data:`CALENDAR` (``op`` with ``args``; answer
+    ``{"result"}``), :data:`SIGN_IN` (``op`` ``start``: answer ``{"authorization_url"}`` for
+    ``redirect_uri``, ``oauth_state`` and ``code_challenge``; ``op`` ``finish``: turn ``code`` with
+    ``code_verifier`` into ``{"account", "secrets"}``) or :data:`OUTPUT` (send ``share_link``
+    through the output ``output_key``; answer ``{"ok": true, "reference"}``, once per
+    ``delivery_id``). The shapes are published as ``korsi-connection-calls.schema.json``.
 
     ``secrets`` are the person's, opened by Korsi for this call only: never log them, never keep
     them. Answer within ``deadline_seconds`` -- stop early and say ``more`` rather than run over.
@@ -399,23 +414,41 @@ class ConnectionCall:
     state: dict[str, Any] | None = None
     #: A sync's: ``max_items``, ``max_bytes``, ``backfill_days``.
     limits: dict[str, Any] = field(default_factory=dict)
-    #: A calendar call's operation and its arguments.
+    #: A calendar call's operation and its arguments; a sign-in's step, ``start`` or ``finish``.
     op: str | None = None
     args: dict[str, Any] = field(default_factory=dict)
+    #: A sign-in's: where the provider sends the person back, Korsi's state and PKCE challenge
+    #: (``start``), and the provider's code with Korsi's verifier (``finish``).
+    redirect_uri: str | None = None
+    oauth_state: str | None = None
+    code_challenge: str | None = None
+    code: str | None = field(default=None, repr=False)
+    code_verifier: str | None = field(default=None, repr=False)
+    #: An output's: one send, the same on every attempt; which output; what kind; and the link.
+    delivery_id: uuid.UUID | None = None
+    output_key: str | None = None
+    kind: str | None = None
+    share_link: dict[str, Any] | None = None
 
     @classmethod
     def parse(cls, payload: Mapping[str, Any]) -> ConnectionCall:
         call = _text(payload, "call")
-        if call not in (VERIFY, SYNC, CALENDAR):
+        if call not in (VERIFY, SYNC, CALENDAR, SIGN_IN, OUTPUT):
             msg = f"not a connection call: {call!r}"
             raise MalformedRequest(msg)
         for key in ("values", "secrets", "settings"):
             if not isinstance(payload.get(key, {}), dict):
                 msg = f"{key} is not an object"
                 raise MalformedRequest(msg)
-        state = payload.get("state")
+        # A sign-in's ``state`` is Korsi's OAuth state, a string; a sync's is the plugin's object.
+        oauth_state = payload.get("state") if call == SIGN_IN else None
+        state = None if call == SIGN_IN else payload.get("state")
         if state is not None and not isinstance(state, dict):
             msg = "state is not an object"
+            raise MalformedRequest(msg)
+        share_link = payload.get("share_link")
+        if share_link is not None and not isinstance(share_link, dict):
+            msg = "share_link is not an object"
             raise MalformedRequest(msg)
         try:
             issued_at = datetime.fromisoformat(_text(payload, "issued_at"))
@@ -441,4 +474,13 @@ class ConnectionCall:
             limits=dict(payload.get("limits") or {}),
             op=payload.get("op"),
             args=dict(payload.get("args") or {}),
+            redirect_uri=_optional_text(payload, "redirect_uri"),
+            oauth_state=str(oauth_state) if oauth_state is not None else None,
+            code_challenge=_optional_text(payload, "code_challenge"),
+            code=_optional_text(payload, "code"),
+            code_verifier=_optional_text(payload, "code_verifier"),
+            delivery_id=_uuid(payload, "delivery_id") if call == OUTPUT else None,
+            output_key=_optional_text(payload, "output_key"),
+            kind=_optional_text(payload, "kind"),
+            share_link=share_link,
         )

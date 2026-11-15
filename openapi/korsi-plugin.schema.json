@@ -170,6 +170,33 @@
           "minimum": 5,
           "title": "Sync Minutes",
           "type": "integer"
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/OutputSpec"
+              },
+              "maxItems": 8,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outputs"
+        },
+        "sign_in": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SignInSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -448,6 +475,65 @@
       },
       "title": "LocalizedText",
       "type": "object"
+    },
+    "OutputKind": {
+      "description": "What Korsi's secretary may send out through a connection (ADR-0111). A closed list: a kind\nis a promise of what the secretary hands the plugin, and Korsi owns it.",
+      "enum": [
+        "calendar.event",
+        "share.link"
+      ],
+      "title": "OutputKind",
+      "type": "string"
+    },
+    "OutputRecipients": {
+      "description": "Whom a ``manual`` output sends to: nobody named, or what the person types.",
+      "enum": [
+        "none",
+        "email",
+        "text"
+      ],
+      "title": "OutputRecipients",
+      "type": "string"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "description": "One output of a connection: what the secretary may send out through it, and when.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "names": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "kind": {
+          "$ref": "#/$defs/OutputKind"
+        },
+        "trigger": {
+          "$ref": "#/$defs/OutputTrigger"
+        },
+        "recipients": {
+          "$ref": "#/$defs/OutputRecipients",
+          "default": "none"
+        }
+      },
+      "required": [
+        "key",
+        "names",
+        "kind",
+        "trigger"
+      ],
+      "title": "OutputSpec",
+      "type": "object"
+    },
+    "OutputTrigger": {
+      "description": "When the secretary sends to an output.",
+      "enum": [
+        "on_record",
+        "manual"
+      ],
+      "title": "OutputTrigger",
+      "type": "string"
     },
     "PanelRecord": {
       "description": "Which record page a ``record.panel`` sits on.",
@@ -905,6 +991,31 @@
         "names"
       ],
       "title": "ServiceSpec",
+      "type": "object"
+    },
+    "SignInKind": {
+      "enum": [
+        "oauth2"
+      ],
+      "title": "SignInKind",
+      "type": "string"
+    },
+    "SignInSpec": {
+      "additionalProperties": false,
+      "description": "A connection a person makes by signing in at the provider, not by typing a password\n(ADR-0111). Korsi runs the flow and keeps the secrets; the plugin speaks the provider's\nlanguage: it gives the address to send the person to and turns the code into secrets.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SignInKind",
+          "default": "oauth2"
+        },
+        "provider": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "title": "SignInSpec",
       "type": "object"
     },
     "SlotSpec": {

@@ -35,6 +35,16 @@ export const ACTION_DEADLINE_SECONDS = 30;
 export const VERIFY = 'connection.verify';
 export const SYNC = 'connection.sync';
 export const CALENDAR = 'connection.calendar';
+/**
+ * Signing a person in at the provider (plugin API 1.10, ADR-0111): `op` `start` answers
+ * `{ authorization_url }`; `op` `finish` answers `{ account, secrets }`.
+ */
+export const SIGN_IN = 'connection.sign_in';
+/**
+ * The secretary sending something out through one of the connection's outputs (1.10, ADR-0111):
+ * answer `{ ok: true, reference }`, the same on every attempt of one `deliveryId`.
+ */
+export const OUTPUT = 'connection.output';
 
 /** Topics of the plugin's own life, always delivered. Others are those its manifest asks for. */
 export const Topic = Object.freeze({
@@ -355,7 +365,7 @@ export function parseActionCall(name: string, payload: Json): ActionCall {
  * stop early and say `more` rather than run over.
  */
 export interface ConnectionCall {
-  call: typeof VERIFY | typeof SYNC | typeof CALENDAR;
+  call: typeof VERIFY | typeof SYNC | typeof CALENDAR | typeof SIGN_IN | typeof OUTPUT;
   callId: string;
   installationId: string;
   connectionId: string;
@@ -372,20 +382,45 @@ export interface ConnectionCall {
   state: Record<string, unknown> | null;
   /** A sync's: `max_items`, `max_bytes`, `backfill_days`. */
   limits: Record<string, unknown>;
-  /** A calendar call's operation and its arguments. */
+  /** A calendar call's operation and its arguments; a sign-in's step, `start` or `finish`. */
   op: string | null;
   args: Record<string, unknown>;
+  /**
+   * A sign-in's: where the provider sends the person back, Korsi's state and PKCE challenge
+   * (`start`), and the provider's code with Korsi's verifier (`finish`).
+   */
+  redirectUri: string | null;
+  oauthState: string | null;
+  codeChallenge: string | null;
+  code: string | null;
+  codeVerifier: string | null;
+  /** An output's: one send, the same on every attempt; which output; what kind; and the link. */
+  deliveryId: string | null;
+  outputKey: string | null;
+  kind: string | null;
+  shareLink: Record<string, unknown> | null;
 }
+
+const optionalText = (payload: Json, key: string): string | null =>
+  payload[key] == null ? null : String(payload[key]);
 
 const strings = (value: Json): Record<string, string> =>
   Object.fromEntries(Object.entries(value).map(([key, item]) => [key, String(item)]));
 
 export function parseConnectionCall(payload: Json): ConnectionCall {
   const call = payload.call;
-  if (call !== VERIFY && call !== SYNC && call !== CALENDAR) {
+  if (
+    call !== VERIFY &&
+    call !== SYNC &&
+    call !== CALENDAR &&
+    call !== SIGN_IN &&
+    call !== OUTPUT
+  ) {
     throw new MalformedRequest(`not a connection call: ${JSON.stringify(call)}`);
   }
-  const state = payload.state ?? null;
+  // A sign-in's `state` is Korsi's OAuth state, a string; a sync's is the plugin's object.
+  const oauthState = call === SIGN_IN && payload.state != null ? String(payload.state) : null;
+  const state = call === SIGN_IN ? null : (payload.state ?? null);
   if (state !== null && (typeof state !== 'object' || Array.isArray(state))) {
     throw new MalformedRequest('state is not an object');
   }
@@ -411,6 +446,15 @@ export function parseConnectionCall(payload: Json): ConnectionCall {
     limits: object(payload, 'limits'),
     op: typeof payload.op === 'string' ? payload.op : null,
     args: object(payload, 'args'),
+    redirectUri: optionalText(payload, 'redirect_uri'),
+    oauthState,
+    codeChallenge: optionalText(payload, 'code_challenge'),
+    code: optionalText(payload, 'code'),
+    codeVerifier: optionalText(payload, 'code_verifier'),
+    deliveryId: call === OUTPUT ? uuid(payload, 'delivery_id') : null,
+    outputKey: optionalText(payload, 'output_key'),
+    kind: optionalText(payload, 'kind'),
+    shareLink: payload.share_link == null ? null : object(payload, 'share_link'),
   };
   // Not enumerable: a log line that prints the call never prints the person's secrets.
   return Object.defineProperty(parsed, 'secrets', {

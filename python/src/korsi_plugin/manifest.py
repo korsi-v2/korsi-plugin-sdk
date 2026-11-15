@@ -23,6 +23,9 @@ ExtensionPoint = Literal["record.panel", "desk.widget", "meeting.live.panel"]
 FeedMatch = Literal["source_key", "personnel_number", "email"]
 FeedOnMissing = Literal["keep", "mark"]
 FeedUpsert = Literal["merge", "replace"]
+OutputKind = Literal["calendar.event", "share.link"]
+OutputRecipients = Literal["none", "email", "text"]
+OutputTrigger = Literal["on_record", "manual"]
 PanelRecord = Literal["case", "meeting", "document"]
 PermissionLevel = Literal["view", "work", "manage"]
 Placement = Literal["external", "instance", "none"]
@@ -32,6 +35,7 @@ PluginType = Literal["intake_connector", "integration", "insight_module", "tool_
 ProposalType = Literal["action.create", "case.change", "decision.candidate", "calendar.event.create", "memory.finding", "case.create", "case.stage.move", "member.create"]
 RecordFieldKind = Literal["keyword", "number", "date", "bool"]
 RecordVisibility = Literal["organization", "case", "personal", "case_members"]
+SignInKind = Literal["oauth2"]
 ToolKind = Literal["read", "action"]
 
 
@@ -65,6 +69,8 @@ class ConnectionSpec(TypedDict):
     provides: NotRequired[list[ConnectionCapability]]
     scopes: NotRequired[list[PluginScope]]
     sync_minutes: NotRequired[int]
+    outputs: NotRequired[list[OutputSpec] | None]
+    sign_in: NotRequired[SignInSpec | None]
 
 
 class DataHandling(TypedDict):
@@ -110,6 +116,16 @@ class LocalizedText(TypedDict):
     fa: NotRequired[str | None]
     en: NotRequired[str | None]
     ar: NotRequired[str | None]
+
+
+class OutputSpec(TypedDict):
+    """One output of a connection: what the secretary may send out through it, and when."""
+
+    key: str
+    names: LocalizedText
+    kind: OutputKind
+    trigger: OutputTrigger
+    recipients: NotRequired[OutputRecipients]
 
 
 class PanelSpec(TypedDict):
@@ -211,6 +227,13 @@ class ServiceSpec(TypedDict):
     names: LocalizedText
 
 
+class SignInSpec(TypedDict):
+    """A connection a person makes by signing in at the provider, not by typing a password"""
+
+    kind: NotRequired[SignInKind]
+    provider: LocalizedText
+
+
 class SlotSpec(TypedDict):
     provides: NotRequired[list[str]]
 
@@ -278,6 +301,10 @@ __all__ = [
     "FeedUpsert",
     "FieldSpec",
     "LocalizedText",
+    "OutputKind",
+    "OutputRecipients",
+    "OutputSpec",
+    "OutputTrigger",
     "PanelRecord",
     "PanelSpec",
     "PermissionLevel",
@@ -295,6 +322,8 @@ __all__ = [
     "RuntimeSpec",
     "ScopeRequest",
     "ServiceSpec",
+    "SignInKind",
+    "SignInSpec",
     "SlotSpec",
     "SpecialistInstructions",
     "SpecialistSpec",

@@ -13,6 +13,8 @@ import httpx
 import pytest
 
 from korsi_plugin import (
+    OUTPUT,
+    SIGN_IN,
     SYNC,
     VERIFY,
     CallReplayed,
@@ -483,6 +485,53 @@ async def test_a_connection_call_not_signed_by_korsi_is_refused(plugin: KorsiPlu
     raw = body(connection_call())
     with pytest.raises(SignatureInvalid):
         await plugin.connection_call(raw, sign("another-secret", raw))
+
+
+async def test_a_sign_in_carries_korsi_s_state_not_a_sync_state(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    raw = body(
+        connection_call(
+            call=SIGN_IN,
+            op="finish",
+            state=None,
+            redirect_uri="https://acme.korsi.ai/apps/connections/callback",
+            code="the-code",
+            code_verifier="the-verifier",
+            secrets={},
+        )
+    )
+    _, call = await plugin.connection_call(raw, sign(SECRET, raw))
+    assert (call.call, call.op, call.code, call.state) == (SIGN_IN, "finish", "the-code", None)
+    assert call.redirect_uri == "https://acme.korsi.ai/apps/connections/callback"
+    # The code and the verifier open the person's account: no log line prints them.
+    assert "the-code" not in repr(call)
+    started = body(connection_call(call=SIGN_IN, op="start", state="korsi-state", secrets={}))
+    _, start = await plugin.connection_call(started, sign(SECRET, started))
+    assert (start.oauth_state, start.state) == ("korsi-state", None)
+
+
+async def test_an_output_call_carries_one_send(plugin: KorsiPlugin) -> None:
+    await install(plugin)
+    delivery = uuid.uuid4()
+    link = {"url": "https://acme.korsi.ai/s/x", "title": "Minutes", "recipients": ["a@b.test"]}
+    raw = body(
+        connection_call(
+            call=OUTPUT,
+            state=None,
+            delivery_id=str(delivery),
+            output_key="send",
+            kind="share.link",
+            share_link=link,
+        )
+    )
+    _, call = await plugin.connection_call(raw, sign(SECRET, raw))
+    assert (call.call, call.delivery_id, call.output_key, call.kind) == (
+        OUTPUT,
+        delivery,
+        "send",
+        "share.link",
+    )
+    assert call.share_link == link
 
 
 async def test_a_connection_call_is_one_of_three(plugin: KorsiPlugin) -> None:

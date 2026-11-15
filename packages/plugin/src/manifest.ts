@@ -20,6 +20,9 @@ export type ExtensionPoint = "record.panel" | "desk.widget" | "meeting.live.pane
 export type FeedMatch = "source_key" | "personnel_number" | "email";
 export type FeedOnMissing = "keep" | "mark";
 export type FeedUpsert = "merge" | "replace";
+export type OutputKind = "calendar.event" | "share.link";
+export type OutputRecipients = "none" | "email" | "text";
+export type OutputTrigger = "on_record" | "manual";
 export type PanelRecord = "case" | "meeting" | "document";
 export type PermissionLevel = "view" | "work" | "manage";
 export type Placement = "external" | "instance" | "none";
@@ -29,6 +32,7 @@ export type PluginType = "intake_connector" | "integration" | "insight_module" |
 export type ProposalType = "action.create" | "case.change" | "decision.candidate" | "calendar.event.create" | "memory.finding" | "case.create" | "case.stage.move" | "member.create";
 export type RecordFieldKind = "keyword" | "number" | "date" | "bool";
 export type RecordVisibility = "organization" | "case" | "personal" | "case_members";
+export type SignInKind = "oauth2";
 export type ToolKind = "read" | "action";
 
 /** The plugin's own app, opened inside Korsi's shell (decision 10). */
@@ -58,6 +62,8 @@ export interface ConnectionSpec {
   provides?: Array<ConnectionCapability>;
   scopes?: Array<PluginScope>;
   sync_minutes?: number;
+  outputs?: Array<OutputSpec> | null;
+  sign_in?: SignInSpec | null;
 }
 
 export interface DataHandling {
@@ -99,6 +105,15 @@ export interface LocalizedText {
   fa?: string | null;
   en?: string | null;
   ar?: string | null;
+}
+
+/** One output of a connection: what the secretary may send out through it, and when. */
+export interface OutputSpec {
+  key: string;
+  names: LocalizedText;
+  kind: OutputKind;
+  trigger: OutputTrigger;
+  recipients?: OutputRecipients;
 }
 
 /** A panel in one of Korsi's pages, loaded only when a person opens it (decision 19). */
@@ -191,6 +206,12 @@ export interface ScopeRequest {
 export interface ServiceSpec {
   key: string;
   names: LocalizedText;
+}
+
+/** A connection a person makes by signing in at the provider, not by typing a password */
+export interface SignInSpec {
+  kind?: SignInKind;
+  provider: LocalizedText;
 }
 
 export interface SlotSpec {

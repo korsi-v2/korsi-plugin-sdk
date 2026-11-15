@@ -12,6 +12,8 @@ import {
   SignatureInvalid,
   SignatureStale,
   sign,
+  OUTPUT,
+  SIGN_IN,
   SYNC,
   Topic,
   UnknownInstallation,
@@ -458,6 +460,52 @@ describe('connection calls', () => {
     await expect(plugin.connectionCall(raw, sign('another-secret', raw))).rejects.toBeInstanceOf(
       SignatureInvalid
     );
+  });
+
+  it("carry a sign-in with Korsi's state, not a sync state", async () => {
+    await install();
+    const raw = body(
+      connectionCall({
+        call: SIGN_IN,
+        op: 'start',
+        state: 'korsi-state',
+        redirect_uri: 'https://acme.korsi.ai/apps/connections/callback',
+        code_challenge: 'challenge',
+        secrets: {},
+      })
+    );
+    const { call } = await plugin.connectionCall(raw, sign(SECRET, raw));
+    expect(call).toMatchObject({
+      call: SIGN_IN,
+      op: 'start',
+      oauthState: 'korsi-state',
+      state: null,
+      codeChallenge: 'challenge',
+    });
+  });
+
+  it('carry one send to an output', async () => {
+    await install();
+    const delivery = '7d6b1f3e-1c2a-4f5b-9a8e-0b1c2d3e4f50';
+    const link = { url: 'https://acme.korsi.ai/s/x', title: 'Minutes', recipients: ['a@b.test'] };
+    const raw = body(
+      connectionCall({
+        call: OUTPUT,
+        state: null,
+        delivery_id: delivery,
+        output_key: 'send',
+        kind: 'share.link',
+        share_link: link,
+      })
+    );
+    const { call } = await plugin.connectionCall(raw, sign(SECRET, raw));
+    expect(call).toMatchObject({
+      call: OUTPUT,
+      deliveryId: delivery,
+      outputKey: 'send',
+      kind: 'share.link',
+      shareLink: link,
+    });
   });
 
   it('are one of three', async () => {

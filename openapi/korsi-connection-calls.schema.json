@@ -183,6 +183,598 @@
       "title": "ConnectionCapability",
       "type": "string"
     },
+    "EventStatus": {
+      "description": "Where an event stands.\n\n``CANCELLED`` is why an enum earns its place over a boolean. A cancelled meeting is not a\ndeleted one: the slot was taken, somebody may have planned around it, and the honest thing to\nshow is a cancelled entry rather than an empty afternoon. Deleting the row asserts it never\nexisted.",
+      "enum": [
+        "confirmed",
+        "tentative",
+        "cancelled"
+      ],
+      "title": "EventStatus",
+      "type": "string"
+    },
+    "ExternalCalendarEvent": {
+      "additionalProperties": false,
+      "description": "One event, as it should look in the external calendar.\n\nThe provider assigns its own ids: on a create ``event_id`` is only Korsi's name for the copy,\nand the provider answers with its own id, which every later update names. What makes a write\nsafe to repeat is ``properties``: before it creates, Korsi looks its copies up by its own\n``korsi_event`` property (``list_events``), so a retried create finds the copy rather than\nmaking a second one.\n\n``recurrence`` holds RFC 5545 ``RRULE`` and ``EXDATE`` lines, built by the calendar domain from\nits own rule. ``properties`` are private to the owning calendar and are how a copy says which\nKorsi event, version and generation it is.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "start": {
+          "$ref": "#/$defs/ExternalEventTime"
+        },
+        "end": {
+          "$ref": "#/$defs/ExternalEventTime"
+        },
+        "status": {
+          "$ref": "#/$defs/EventStatus",
+          "default": "confirmed"
+        },
+        "recurrence": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Recurrence",
+          "type": "array"
+        },
+        "reminder_minutes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reminder Minutes"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Url"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Properties",
+          "type": "object"
+        },
+        "attendees": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attendees"
+        }
+      },
+      "required": [
+        "event_id",
+        "title",
+        "start",
+        "end"
+      ],
+      "title": "ExternalCalendarEvent",
+      "type": "object"
+    },
+    "ExternalCalendarSummary": {
+      "additionalProperties": false,
+      "description": "One calendar in the person's external account, as the chooser lists it.",
+      "properties": {
+        "calendar_id": {
+          "title": "Calendar Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "primary": {
+          "default": false,
+          "title": "Primary",
+          "type": "boolean"
+        },
+        "writable": {
+          "default": false,
+          "title": "Writable",
+          "type": "boolean"
+        },
+        "colour": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colour"
+        },
+        "time_zone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Zone"
+        }
+      },
+      "required": [
+        "calendar_id",
+        "name"
+      ],
+      "title": "ExternalCalendarSummary",
+      "type": "object"
+    },
+    "ExternalChanges": {
+      "additionalProperties": false,
+      "description": "One read of what changed in the external calendar.\n\nOne page: its items, the cursor the next read starts from -- the plugin's own, opaque to Korsi\n-- and whether more is waiting now. A cursor Korsi sends that is no longer good is answered\n``invalid_state``, and Korsi reads the whole window again.",
+      "properties": {
+        "items": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ExternalEventData"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        },
+        "more": {
+          "default": false,
+          "title": "More",
+          "type": "boolean"
+        }
+      },
+      "title": "ExternalChanges",
+      "type": "object"
+    },
+    "ExternalEventData": {
+      "additionalProperties": false,
+      "description": "One event as the external calendar holds it, in full: what a change read back carries.\n\nAn occurrence of a repeating event arrives as its own item with ``recurring_event_id`` set,\nbecause what Korsi imports is the occurrences a person will actually see, not the provider's\nrule for producing them.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "etag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Etag"
+        },
+        "html_link": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Html Link"
+        },
+        "cancelled": {
+          "default": false,
+          "title": "Cancelled",
+          "type": "boolean"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExternalEventTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExternalEventTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/EventStatus",
+          "default": "confirmed"
+        },
+        "busy": {
+          "default": true,
+          "title": "Busy",
+          "type": "boolean"
+        },
+        "recurring_event_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recurring Event Id"
+        },
+        "conference_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conference Url"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Properties",
+          "type": "object"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "meeting_uid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Meeting Uid"
+        },
+        "attendees": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attendees"
+        },
+        "attendee_names": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attendee Names",
+          "type": "object"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "title": "ExternalEventData",
+      "type": "object"
+    },
+    "ExternalEventPatch": {
+      "additionalProperties": false,
+      "description": "A change to an event that is the person's own in the external calendar.\n\nPartial on purpose: such an event carries things Korsi does not hold -- guests from outside\nthe organization, a conference, a colour -- and replacing it whole would erase them. Only what\nKorsi changed is sent. Its people the same way: the colleagues named on it in Korsi who are not\nthere yet, never the whole list, and nobody is ever taken off (ADR-0077).\n\n**Exactly the fields a plugin is told of.** A plugin validates the patch strictly, so a field\nhere that its contract does not name refuses every patch: `remove_attendees`, declared and\nnever used, did that to each change to a person's own Exchange event from 2026-10-26 to\n2026-11-10 (`provider.rejected: Extra inputs are not permitted`).",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "start": {
+          "$ref": "#/$defs/ExternalEventTime"
+        },
+        "end": {
+          "$ref": "#/$defs/ExternalEventTime"
+        },
+        "status": {
+          "$ref": "#/$defs/EventStatus",
+          "default": "confirmed"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Properties",
+          "type": "object"
+        },
+        "add_attendees": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Add Attendees",
+          "type": "array"
+        }
+      },
+      "required": [
+        "event_id",
+        "title",
+        "start",
+        "end"
+      ],
+      "title": "ExternalEventPatch",
+      "type": "object"
+    },
+    "ExternalEventState": {
+      "additionalProperties": false,
+      "description": "What the external calendar says about one event it holds.",
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "etag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Etag"
+        },
+        "html_link": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Html Link"
+        },
+        "cancelled": {
+          "default": false,
+          "title": "Cancelled",
+          "type": "boolean"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Properties",
+          "type": "object"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Updated At"
+        },
+        "attendees": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attendees"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "title": "ExternalEventState",
+      "type": "object"
+    },
+    "ExternalEventTime": {
+      "additionalProperties": false,
+      "description": "One end of an event: a date for an all-day event, an instant and its zone otherwise.\n\n``day`` rather than ``date``: a field named after the type it holds shadows that type while the\nmodel's annotations are resolved, and the annotation then means ``None``.",
+      "properties": {
+        "day": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Day"
+        },
+        "date_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date Time"
+        },
+        "time_zone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Time Zone"
+        }
+      },
+      "title": "ExternalEventTime",
+      "type": "object"
+    },
     "MailAddress": {
       "additionalProperties": false,
       "description": "One party to a message, as the mailbox shows it.",
@@ -510,6 +1102,432 @@
         "headers"
       ],
       "title": "MailMessage",
+      "type": "object"
+    },
+    "OutputAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "title": "OutputAnswer",
+      "type": "object"
+    },
+    "OutputCall": {
+      "additionalProperties": false,
+      "description": "Send this out through the output ``output_key`` (ADR-0111).\n\n``delivery_id`` is the same on every attempt of one send: a plugin that already sent it answers\nwhat it answered then, and sends nothing twice.",
+      "properties": {
+        "call": {
+          "const": "connection.output",
+          "default": "connection.output",
+          "title": "Call",
+          "type": "string"
+        },
+        "call_id": {
+          "format": "uuid",
+          "title": "Call Id",
+          "type": "string"
+        },
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "connection_id": {
+          "format": "uuid",
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "connection_key": {
+          "maxLength": 48,
+          "title": "Connection Key",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        },
+        "locale": {
+          "maxLength": 16,
+          "title": "Locale",
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        },
+        "deadline_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "delivery_id": {
+          "format": "uuid",
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "output_key": {
+          "maxLength": 48,
+          "title": "Output Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/OutputKind"
+        },
+        "share_link": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SharedLink"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "call_id",
+        "installation_id",
+        "connection_id",
+        "connection_key",
+        "user_id",
+        "locale",
+        "timezone",
+        "deadline_seconds",
+        "issued_at",
+        "delivery_id",
+        "output_key",
+        "kind"
+      ],
+      "title": "OutputCall",
+      "type": "object"
+    },
+    "OutputKind": {
+      "description": "What Korsi's secretary may send out through a connection (ADR-0111). A closed list: a kind\nis a promise of what the secretary hands the plugin, and Korsi owns it.",
+      "enum": [
+        "calendar.event",
+        "share.link"
+      ],
+      "title": "OutputKind",
+      "type": "string"
+    },
+    "SharedLink": {
+      "additionalProperties": false,
+      "description": "A share link the person made (ADR-0099), as the secretary hands it to an output.",
+      "properties": {
+        "url": {
+          "maxLength": 2000,
+          "title": "Url",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "title": "Title",
+          "type": "string"
+        },
+        "scope": {
+          "maxLength": 64,
+          "title": "Scope",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "recipients": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Recipients",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "url",
+        "title",
+        "scope",
+        "expires_at"
+      ],
+      "title": "SharedLink",
+      "type": "object"
+    },
+    "SignInAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_url": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authorization Url"
+        },
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerifiedAccount"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "SignInAnswer",
+      "type": "object"
+    },
+    "SignInCall": {
+      "additionalProperties": false,
+      "description": "Sign a person in at the provider, in two steps (ADR-0111).\n\n``start``: answer the address to send the person to -- the provider's authorization page with\n``redirect_uri``, ``state`` and the PKCE ``code_challenge`` (S256) as given. Korsi made the\nstate and keeps the verifier; the plugin keeps nothing.\n\n``finish``: the provider sent the person back with ``code``. Turn it into the secrets to keep\n(a refresh token, say) with ``code_verifier`` and the same ``redirect_uri``, and say whose\naccount it is. Korsi seals the secrets and hands them back on every later call, as it does a\npassword. ``values`` and ``secrets`` on the envelope are empty: there is no connection yet.",
+      "properties": {
+        "call": {
+          "const": "connection.sign_in",
+          "default": "connection.sign_in",
+          "title": "Call",
+          "type": "string"
+        },
+        "call_id": {
+          "format": "uuid",
+          "title": "Call Id",
+          "type": "string"
+        },
+        "installation_id": {
+          "format": "uuid",
+          "title": "Installation Id",
+          "type": "string"
+        },
+        "connection_id": {
+          "format": "uuid",
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "connection_key": {
+          "maxLength": 48,
+          "title": "Connection Key",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "title": "User Id",
+          "type": "string"
+        },
+        "locale": {
+          "maxLength": 16,
+          "title": "Locale",
+          "type": "string"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        },
+        "deadline_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "issued_at": {
+          "format": "date-time",
+          "title": "Issued At",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "start",
+            "finish"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "redirect_uri": {
+          "maxLength": 2000,
+          "title": "Redirect Uri",
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "code_challenge": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code Challenge"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code"
+        },
+        "code_verifier": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code Verifier"
+        }
+      },
+      "required": [
+        "call_id",
+        "installation_id",
+        "connection_id",
+        "connection_key",
+        "user_id",
+        "locale",
+        "timezone",
+        "deadline_seconds",
+        "issued_at",
+        "op",
+        "redirect_uri"
+      ],
+      "title": "SignInCall",
       "type": "object"
     },
     "SkippedItem": {
