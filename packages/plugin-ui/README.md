@@ -16,8 +16,8 @@ formatDate('2026-10-20', page?.context);   // '۲۸ مهر ۱۴۰۵' for a Jalal
 formatNumber(1234.5, page?.context);       // '۱٬۲۳۴٫۵'
 ```
 
-The calendar and the digits are the organization's (`calendar_system`, `numerals`), the language
-only names the months -- Korsi's own rule. Korsi's typefaces come from the Korsi framing the page
+The calendar and the digits are the reader's (`calendar_system`, `numerals`): their own choice,
+else the organization's; the language only names the months -- Korsi's own rule. Korsi's typefaces come from the Korsi framing the page
 (`<korsi>/sdk/fonts/`); `mountKorsiPage` loads them, or call `loadKorsiFonts(origin)`. Allow them
 with `font-src <korsi origins>`.
 

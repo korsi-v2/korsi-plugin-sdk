@@ -97,8 +97,8 @@ export function applyTheme(
 
 /**
  * Everything in `korsi:init` a page's look depends on: the theme, the language (`lang`), the
- * direction (`dir`), and the organization's calendar and digits (`data-calendar`,
- * `data-numerals`) for a stylesheet that cares.
+ * direction (`dir`), and the reader's calendar and digits (`data-calendar`, `data-numerals`;
+ * their own, else the organization's) for a stylesheet that cares.
  */
 export function applyContext(
   context: KorsiContext,

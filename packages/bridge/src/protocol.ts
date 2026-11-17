@@ -130,9 +130,9 @@ export interface KorsiContext {
   locale: string;
   dir: 'rtl' | 'ltr';
   theme: KorsiTheme;
-  /** The organization's calendar. */
+  /** The reader's calendar: their own choice, else the organization's. */
   calendar_system: 'jalali' | 'gregorian';
-  /** The organization's digits. */
+  /** The reader's digits: their own choice, else the organization's. */
   numerals: 'persian' | 'latin';
   /** The person's time zone (IANA), when Korsi knows it. */
   timezone: string | null;

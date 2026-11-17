@@ -1,8 +1,8 @@
 /**
- * Dates and numbers as the organization writes them, through `Intl` -- no calendar library.
+ * Dates and numbers as the reader writes them, through `Intl` -- no calendar library.
  *
- * Korsi's rule (steering 10, i18n): **the calendar and the digits are the organization's, the
- * language only names the months.** A Persian organization reading Korsi in English still
+ * Korsi's rule (steering 10, i18n): **the calendar and the digits are the reader's -- their own
+ * choice, else the organization's -- and the language only names the months.** A Persian organization reading Korsi in English still
  * schedules in Jalali and may well write Persian digits. So:
  *
  * - `calendar_system: 'jalali'` → `-u-ca-persian`; otherwise Gregorian;
